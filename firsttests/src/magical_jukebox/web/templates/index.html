@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="da">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Magical Jukebox Control</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body data-poll-interval="{{ poll_interval_ms }}">
+<main>
+    <header>
+        <div>
+            <p class="eyebrow">PC prototype</p>
+            <h1>Magical Jukebox</h1>
+        </div>
+        <span id="engine-pill" class="pill muted">Engine unknown</span>
+    </header>
+
+    <section class="status-grid">
+        <article class="card primary-card">
+            <span class="label">Mode</span>
+            <strong id="mode">—</strong>
+            <span id="state" class="state">—</span>
+            <p id="message">Waiting for status…</p>
+        </article>
+        <article class="card">
+            <span class="label">Input</span>
+            <strong id="expects-input">—</strong>
+            <span id="microphone">Microphone: —</span>
+        </article>
+        <article class="card">
+            <span class="label">Bluetooth</span>
+            <strong id="bluetooth-state">—</strong>
+            <span id="bluetooth-device">Device: —</span>
+        </article>
+        <article class="card">
+            <span class="label">System</span>
+            <strong id="internet">Internet: —</strong>
+            <span id="battery">Battery: —</span>
+        </article>
+    </section>
+
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">State machine</p>
+                <h2>Modes</h2>
+            </div>
+            <div class="inline-actions">
+                <button data-command="force-next">Force next</button>
+                <button data-command="reset-mode" class="secondary">Reset mode</button>
+            </div>
+        </div>
+        <div id="mode-buttons" class="button-grid"></div>
+    </section>
+
+    <section class="two-column">
+        <article class="panel">
+            <p class="eyebrow">Mock hardware</p>
+            <h2>Virtual buttons</h2>
+            <div class="button-grid compact">
+                <button data-button-id="1">Button 1</button>
+                <button data-button-id="2">Button 2</button>
+                <button data-button-id="3">Button 3</button>
+                <button data-button-id="4">Button 4</button>
+                <button data-button-id="5" class="secondary">Nav 1</button>
+                <button data-button-id="6" class="secondary">Nav 2</button>
+                <button data-button-id="7" class="secondary">Nav 3</button>
+                <button data-button-id="8" class="secondary">Nav 4</button>
+            </div>
+        </article>
+
+        <article class="panel">
+            <p class="eyebrow">Mock Bluetooth</p>
+            <h2>Phone connection</h2>
+            <label>
+                Device name
+                <input id="device-name" value="Test phone">
+            </label>
+            <div class="inline-actions top-gap">
+                <button id="connect-bluetooth">Connect</button>
+                <button id="disconnect-bluetooth" class="secondary">Disconnect</button>
+            </div>
+        </article>
+    </section>
+
+    <section class="panel">
+        <p class="eyebrow">Mock audio</p>
+        <h2>Local media</h2>
+        <div class="media-controls">
+            <select id="media-select">
+                <option value="">No media files found</option>
+            </select>
+            <button id="play-media">Play</button>
+            <button id="stop-media" class="secondary">Stop</button>
+        </div>
+        <p id="audio-status" class="muted-text">Audio: —</p>
+    </section>
+
+    <section class="panel log-panel">
+        <div class="panel-heading">
+            <div>
+                <p class="eyebrow">Backend</p>
+                <h2>Logs</h2>
+            </div>
+            <button id="clear-visible-logs" class="secondary">Clear view</button>
+        </div>
+        <pre id="logs"></pre>
+    </section>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+</main>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

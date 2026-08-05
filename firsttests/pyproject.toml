@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "magical-jukebox"
+version = "0.1.0"
+description = "PC-testable Flask and asyncio scaffold for a Raspberry Pi magical jukebox"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "Flask>=3.1,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+]
+pi = [
+    "rpi-ws281x>=5,<6",
+]
+
+[project.scripts]
+magical-jukebox = "magical_jukebox.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+magical_jukebox = [
+    "web/templates/*.html",
+    "web/static/*.js",
+    "web/static/*.css",
+    "media/*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
