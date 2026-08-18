@@ -1,0 +1,20 @@
+sudo reboot
+
+  After reconnecting, run:
+
+  cd /home/jukeboks/jukeboksen
+  .venv-rgb/bin/python rgbtest.py
+
+
+
+wpctl status
+wpctl set-volume 71 1
+
+
+pactl set-sink-volume @DEFAULT_SINK@ 90% && pactl get-sink-volume @DEFAULT_SINK@
+
+cvlc --start-time=16 --play-and-exit "testmp3.mp3"
+
+
+ cd ~/jukeboksen
+  sudo .venv-rgb/bin/python rgbtest.py

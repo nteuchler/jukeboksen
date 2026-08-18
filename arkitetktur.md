@@ -8,6 +8,7 @@ Til at begynde med skal vi kun have styr på web servicen og state machinen. Lav
 # Hardware
 ## Raspberry pi 4
 ## Speaker and amplifier
+### AMP XH-M567 TPA3116D2 
 ## Op til 4 arcade knapper til musik quiz
 ## 4 knapper til navigation
 
