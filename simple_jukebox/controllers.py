@@ -215,9 +215,9 @@ class RgbController:
     def _run_mode(self, mode: str, stop_event: threading.Event) -> None:
         try:
             if self._rgb_module is None:
-                import rgbtest
+                from simple_jukebox import rgb
 
-                self._rgb_module = rgbtest
+                self._rgb_module = rgb
             runners = {
                 "flame": self._rgb_module.run_flame,
                 "party": self._rgb_module.run_party,

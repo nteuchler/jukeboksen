@@ -17,7 +17,8 @@ Open `http://<raspberry-pi-address>:5000`. Put MP3, WAV, OGG, FLAC, or M4A files
 `simple_jukebox/media/`; they are shown in the Local music list. Switching away from Local files stops VLC; switching
 away from Bluetooth makes the adapter non-discoverable and non-pairable.
 The page also controls the PulseAudio default-output volume and selects Off, Flame,
-Party, or audio-reactive Equalizer RGB effects from `rgbtest.py`. The Equalizer
+Party, or audio-reactive Equalizer RGB effects owned by `simple_jukebox/rgb.py`.
+The Equalizer
 listens to the common speaker-output monitor, so it reacts to local files and
 Bluetooth playback.
 
