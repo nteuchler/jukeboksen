@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.backups/
+.venv*/
+simple_jukebox/.venv/

@@ -92,18 +92,22 @@ def step_flame(heat_band):
             heat_band[offset] = max(heat_band[offset], spark_strength * falloff * flicker)
 
 
-def run_flame(duration_s: float):
+def run_flame(duration_s: float | None = None, stop_event=None):
+    if stop_event is None:
+        stop_event = threading.Event()
     left = [0.0 for _ in range(SIDE_FLAME_LENGTH)]
     right = [0.0 for _ in range(SIDE_FLAME_LENGTH)]
-    end = time.time() + duration_s
-    while time.time() < end:
+    end = None if duration_s is None else time.time() + duration_s
+    while not stop_event.is_set() and (end is None or time.time() < end):
         step_flame(left)
         step_flame(right)
         render_flame_frame(left, right)
-        time.sleep(FRAME_DELAY)
+        stop_event.wait(FRAME_DELAY)
 
 
-def run_party(duration_s: float):
+def run_party(duration_s: float | None = None, stop_event=None):
+    if stop_event is None:
+        stop_event = threading.Event()
     # flashing and fading party colors across whole strip
     colors = [
         (255, 20, 147),
@@ -112,14 +116,16 @@ def run_party(duration_s: float):
         (255, 140, 0),
         (200, 0, 255),
     ]
-    end = time.time() + duration_s
+    end = None if duration_s is None else time.time() + duration_s
     t = 0.0
-    while time.time() < end:
+    while not stop_event.is_set() and (end is None or time.time() < end):
         # choose base color and next color
         base = random.choice(colors)
         nxt = random.choice(colors)
         steps = int(max(6, 0.3 / FRAME_DELAY))
         for s in range(steps):
+            if stop_event.is_set() or (end is not None and time.time() >= end):
+                return
             mix = s / max(1, steps - 1)
             r = int(base[0] * (1 - mix) + nxt[0] * mix)
             g = int(base[1] * (1 - mix) + nxt[1] * mix)
@@ -134,7 +140,7 @@ def run_party(duration_s: float):
                 strip.setPixelColor(i, color)
             strip.show()
             t += 0.3
-            time.sleep(FRAME_DELAY)
+            stop_event.wait(FRAME_DELAY)
 
 
 def _pulse_environments():
@@ -372,7 +378,7 @@ def run_equalizer(stop_event=None):
                 right[i] = max(target, right[i] * 0.9)
 
             render_flame_frame(left, right)
-            time.sleep(FRAME_DELAY)
+            stop_event.wait(FRAME_DELAY)
     except KeyboardInterrupt:
         return
     finally:

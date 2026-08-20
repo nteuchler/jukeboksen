@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jukeboks</title>
+  <style>
+    body { font-family: sans-serif; max-width: 650px; margin: 2rem auto; padding: 0 1rem; background: #f3f1eb; color: #202020; }
+    section { background: white; padding: 1.2rem; margin: 1rem 0; border-radius: 10px; }
+    button, select, input { font: inherit; padding: .7rem 1rem; margin: .25rem; }
+    button.active { background: #176b55; color: white; }
+    .control-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+    input[type="range"] { flex: 1; min-width: 180px; padding-left: 0; padding-right: 0; }
+    output { min-width: 3.5rem; font-weight: bold; }
+    #error { color: #a21d1d; }
+  </style>
+</head>
+<body>
+  <h1>Jukeboks control</h1>
+  <section>
+    <h2>Mode</h2>
+    <button class="mode" data-mode="idle">Idle</button>
+    <button class="mode" data-mode="local_files">Local files</button>
+    <button class="mode" data-mode="bluetooth">Bluetooth speaker</button>
+  </section>
+  <section>
+    <h2>Local music</h2>
+    <select id="tracks"></select>
+    <button id="play">Play</button>
+    <button id="stop">Stop</button>
+    <button id="mute">Mute / sound on</button>
+  </section>
+  <section>
+    <h2>Volume</h2>
+    <div class="control-row">
+      <input id="volume" type="range" min="0" max="100" step="1" aria-label="Output volume">
+      <output id="volume-value" for="volume">--%</output>
+    </div>
+  </section>
+  <section>
+    <h2>RGB mode</h2>
+    <button class="rgb" data-rgb="off">Off</button>
+    <button class="rgb" data-rgb="flame">Flame</button>
+    <button class="rgb" data-rgb="party">Party</button>
+    <button class="rgb" data-rgb="equalizer">Equalizer</button>
+    <p id="rgb-error"></p>
+  </section>
+  <section>
+    <strong id="mode">Loading…</strong>
+    <p id="message"></p>
+    <p id="details"></p>
+    <p id="error"></p>
+  </section>
+  <script>
+    async function api(url, body) {
+      const response = await fetch(url, {method: body ? 'POST' : 'GET', headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      return data;
+    }
+    async function refresh() {
+      const status = await api('/api/status');
+      document.querySelector('#mode').textContent = `Mode: ${status.mode}`;
+      document.querySelector('#message').textContent = status.message;
+      document.querySelector('#details').textContent = status.playing ? `Playing: ${status.track}${status.muted ? ' (muted)' : ''}` : status.bluetooth_active ? 'Bluetooth active' : 'Not playing';
+      document.querySelectorAll('.mode').forEach(button => button.classList.toggle('active', button.dataset.mode === status.mode));
+      const volume = document.querySelector('#volume');
+      if (document.activeElement !== volume) volume.value = status.volume;
+      document.querySelector('#volume-value').textContent = `${volume.value}%`;
+      document.querySelectorAll('.rgb').forEach(button => button.classList.toggle('active', button.dataset.rgb === status.rgb.mode));
+      document.querySelector('#rgb-error').textContent = status.rgb.error || '';
+    }
+    async function act(url, body) {
+      document.querySelector('#error').textContent = '';
+      try { await api(url, body); await refresh(); } catch (error) { document.querySelector('#error').textContent = error.message; }
+    }
+    document.querySelectorAll('.mode').forEach(button => button.onclick = () => act('/api/mode', {mode: button.dataset.mode}));
+    document.querySelector('#play').onclick = () => act('/api/play', {track: document.querySelector('#tracks').value});
+    document.querySelector('#stop').onclick = () => act('/api/stop', {});
+    document.querySelector('#mute').onclick = () => act('/api/mute', {});
+    const volume = document.querySelector('#volume');
+    volume.oninput = () => { document.querySelector('#volume-value').textContent = `${volume.value}%`; };
+    volume.onchange = () => act('/api/volume', {volume: Number(volume.value)});
+    document.querySelectorAll('.rgb').forEach(button => button.onclick = () => act('/api/rgb', {mode: button.dataset.rgb}));
+    api('/api/tracks').then(data => { document.querySelector('#tracks').innerHTML = data.tracks.map(track => `<option>${track}</option>`).join(''); });
+    refresh(); setInterval(refresh, 1000);
+  </script>
+</body>
+</html>
