@@ -20,12 +20,12 @@ LED_BRIGHTNESS = 50
 FRAME_DELAY = 0.03
 SIDE_LENGTH = min(30, LED_COUNT // 2)
 
-# PulseAudio monitor streams are attenuated by the system output volume. This
-# range and response curve let normal music animate most of each 30-pixel side
-# while silence remains dark and loud peaks can reach full height.
-EQUALIZER_NOISE_FLOOR_DB = -58.0
-EQUALIZER_FULL_SCALE_DB = -28.0
-EQUALIZER_RESPONSE_CURVE = 0.70
+# Calibrated from the jukebox's AUX monitor, where normal playback measures
+# roughly -20 to -13 dB RMS. Keeping that range away from either limit makes
+# verses, choruses, and beats visibly grow and shrink instead of saturating.
+EQUALIZER_NOISE_FLOOR_DB = -26.0
+EQUALIZER_FULL_SCALE_DB = -11.0
+EQUALIZER_RESPONSE_CURVE = 0.85
 
 _strip = None
 _strip_lock = threading.Lock()

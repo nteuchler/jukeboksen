@@ -228,3 +228,11 @@ class RgbController:
             if self._stop_event is stop_event:
                 self.error = str(error)
                 self.mode = "off"
+        finally:
+            # Never leave the last rendered frame looking like a frozen effect
+            # when capture exits or an RGB worker fails.
+            if self._rgb_module is not None:
+                try:
+                    self._rgb_module.clear_strip()
+                except Exception:
+                    pass
