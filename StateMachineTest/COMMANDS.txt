@@ -1,0 +1,36 @@
+FIRST-TIME SETUP
+================
+No third-party packages are needed for slice 1.
+
+Open a terminal in this folder:
+cd jukeboks_state_machine
+
+
+RUN INTERACTIVELY
+=================
+python3 run.py
+
+Try these commands inside the program:
+status
+mode bluetooth
+next
+status
+mode activity
+next
+quit
+
+
+RUN ALL TESTS
+=============
+python3 -m unittest discover -s tests -v
+
+
+CHECK PYTHON SYNTAX
+===================
+python3 -m compileall jukebox run.py tests
+
+
+EXPECTED TEST RESULT
+====================
+Six tests should run and finish with:
+OK
