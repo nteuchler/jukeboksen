@@ -4,3 +4,6 @@ __pycache__/
 .backups/
 .venv*/
 simple_jukebox/.venv/
+simple_jukebox/media/*
+!simple_jukebox/media/.gitkeep
+!simple_jukebox/media/testmp3.mp3

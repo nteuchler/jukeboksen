@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from simple_jukebox.app import create_app
 from simple_jukebox.tests.test_state_machine import FakeBluetooth, FakePlayer
 
@@ -69,3 +71,12 @@ def test_web_rejects_invalid_volume_and_rgb_mode():
 
     assert client.post("/api/volume", json={"volume": 101}).status_code == 400
     assert client.post("/api/rgb", json={"mode": "rainbow"}).status_code == 400
+
+
+def test_default_media_folder_is_dedicated_to_user_audio():
+    app = create_app(
+        bluetooth=FakeBluetooth(), volume=FakeVolume(), rgb=FakeRgb(),
+    )
+
+    expected = Path(__file__).resolve().parents[1] / "media"
+    assert app.config["player"].media_folder == expected

@@ -14,8 +14,8 @@ def create_app(
     *, player=None, bluetooth=None, volume=None, rgb=None,
     media_folder: Path | None = None,
 ) -> Flask:
-    project_folder = Path(__file__).resolve().parent.parent
-    player = player or VlcPlayer(media_folder or project_folder)
+    app_folder = Path(__file__).resolve().parent
+    player = player or VlcPlayer(media_folder or app_folder / "media")
     bluetooth = bluetooth or BluetoothSpeaker()
     volume = volume or SystemVolume()
     rgb = rgb or RgbController()

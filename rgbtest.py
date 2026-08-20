@@ -182,42 +182,62 @@ def _pulse_environments():
 
 
 def _find_capture_device(pulse_envs):
-    """Find the Bluetooth playback monitor across all audio sessions."""
-    fallback = (pulse_envs[0], "@DEFAULT_MONITOR@")
+    """Find the monitor for the speaker output carrying all jukebox audio.
+
+    Local VLC playback and the Bluetooth loopback both feed PulseAudio's
+    default sink, so its monitor is the common source for the equalizer.
+    """
     for pulse_env in pulse_envs:
         try:
-            result = subprocess.run(
-                ["pactl", "list", "short", "sources"],
-                capture_output=True,
-                text=True,
-                timeout=2,
-                env=pulse_env,
-                check=False,
-            )
+            def pactl_output(*arguments):
+                result = subprocess.run(
+                    ["pactl", *arguments],
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                    env=pulse_env,
+                    check=False,
+                )
+                return result.stdout.strip() if result.returncode == 0 else ""
+
+            default_sink = pactl_output("get-default-sink")
             sources = [
                 fields[1]
-                for line in result.stdout.splitlines()
+                for line in pactl_output("list", "short", "sources").splitlines()
                 if len(fields := line.split()) >= 2
             ]
-            # A phone playing to this machine is an A2DP sink. PulseAudio
-            # exposes its playback as bluez_sink.<address>.*.monitor.
-            bluetooth_monitors = [
-                name
-                for name in sources
-                if name.startswith("bluez_sink") and name.endswith(".monitor")
-            ]
-            if bluetooth_monitors:
-                return pulse_env, bluetooth_monitors[0]
+            default_monitor = f"{default_sink}.monitor" if default_sink else ""
 
-            # Keep support for profiles which expose Bluetooth as an input.
+            sink_indexes = {
+                fields[1]: fields[0]
+                for line in pactl_output("list", "short", "sinks").splitlines()
+                if len(fields := line.split()) >= 2
+            }
+            default_index = sink_indexes.get(default_sink)
+            sink_inputs = [
+                fields
+                for line in pactl_output("list", "short", "sink-inputs").splitlines()
+                if len(fields := line.split()) >= 2
+            ]
+            if (
+                default_monitor in sources
+                and default_index is not None
+                and any(fields[1] == default_index for fields in sink_inputs)
+            ):
+                return pulse_env, default_monitor
+
             bluetooth_sources = [
-                name for name in sources if name.startswith("bluez_source")
+                name for name in sources
+                if name.startswith("bluez_source")
+                or (name.startswith("bluez_sink") and name.endswith(".monitor"))
             ]
             if bluetooth_sources:
                 return pulse_env, bluetooth_sources[0]
+            if default_monitor in sources:
+                return pulse_env, default_monitor
         except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
             continue
-    return fallback
+    return pulse_envs[0], "@DEFAULT_MONITOR@"
 
 
 def _playback_level_reader(rate, chunk):
@@ -338,7 +358,7 @@ def run_equalizer(stop_event=None):
 
     try:
         levels = _playback_level_reader(RATE, CHUNK)
-        print("Equalizer searching for Bluetooth playback audio", flush=True)
+        print("Equalizer listening to jukebox output audio", flush=True)
         while not stop_event.is_set():
             try:
                 level = next(levels)
