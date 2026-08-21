@@ -119,6 +119,10 @@ class BluetoothSpeaker:
         if self.process.poll() is None:
             self._send("discoverable off")
             self._send("pairable off")
+            # Discovery settings do not stop an existing A2DP connection.
+            # Powering the adapter off disconnects the phone and removes its
+            # PulseAudio source/loopback before local VLC playback starts.
+            self._send("power off")
             self._send("quit")
             try:
                 self.process.wait(timeout=2)
