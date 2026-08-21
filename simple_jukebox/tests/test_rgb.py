@@ -1,4 +1,4 @@
-from simple_jukebox.rgb import SIDE_LENGTH, level_to_height
+from simple_jukebox.rgb import EQUALIZER_SIDE_LENGTH, SIDE_LENGTH, level_to_height
 
 
 def test_equalizer_uses_full_range_and_preserves_amplitude_changes():
@@ -9,6 +9,7 @@ def test_equalizer_uses_full_range_and_preserves_amplitude_changes():
 
     assert heights == sorted(heights)
     assert heights[0] == 0
-    assert 12 <= heights[3] <= 16
-    assert heights[5] >= 25
-    assert heights[-1] == SIDE_LENGTH
+    assert 20 <= heights[3] <= 23
+    assert heights[5] >= 39
+    assert heights[-1] == EQUALIZER_SIDE_LENGTH
+    assert EQUALIZER_SIDE_LENGTH == SIDE_LENGTH + 15

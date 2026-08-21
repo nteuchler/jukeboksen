@@ -19,6 +19,7 @@ LED_PIN = 10
 LED_BRIGHTNESS = 50
 FRAME_DELAY = 0.03
 SIDE_LENGTH = min(30, LED_COUNT // 2)
+EQUALIZER_SIDE_LENGTH = min(SIDE_LENGTH + 15, LED_COUNT // 2)
 
 # Calibrated from the jukebox's AUX monitor, where normal playback measures
 # roughly -20 to -13 dB RMS. Keeping that range away from either limit makes
@@ -58,7 +59,7 @@ def _render_sides(left: list[float], right: list[float]) -> None:
         strip.setPixelColor(offset, _heat_color(heat))
     for offset, heat in enumerate(right):
         strip.setPixelColor(LED_COUNT - 1 - offset, _heat_color(heat))
-    for pixel in range(SIDE_LENGTH, LED_COUNT - SIDE_LENGTH):
+    for pixel in range(len(left), LED_COUNT - len(right)):
         strip.setPixelColor(pixel, Color(0, 0, 0))
     strip.show()
 
@@ -253,19 +254,19 @@ def level_to_height(level: float) -> int:
     span = EQUALIZER_FULL_SCALE_DB - EQUALIZER_NOISE_FLOOR_DB
     normalized = (decibels - EQUALIZER_NOISE_FLOOR_DB) / span
     normalized = max(0.0, min(1.0, normalized)) ** EQUALIZER_RESPONSE_CURVE
-    return round(normalized * SIDE_LENGTH)
+    return round(normalized * EQUALIZER_SIDE_LENGTH)
 
 
 def run_equalizer(stop_event: threading.Event) -> None:
-    left = [0.0] * SIDE_LENGTH
-    right = [0.0] * SIDE_LENGTH
+    left = [0.0] * EQUALIZER_SIDE_LENGTH
+    right = [0.0] * EQUALIZER_SIDE_LENGTH
     smoothed = 0.0
     for level in _levels(stop_event):
         if stop_event.is_set():
             break
         smoothed = level if level > smoothed else smoothed * 0.82 + level * 0.18
         height = level_to_height(smoothed)
-        for index in range(SIDE_LENGTH):
+        for index in range(EQUALIZER_SIDE_LENGTH):
             target = 1.0 if index < height else 0.0
             left[index] = max(target, left[index] * 0.88)
             right[index] = max(target, right[index] * 0.88)
