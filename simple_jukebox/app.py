@@ -8,6 +8,7 @@ from flask import Flask, jsonify, render_template, request
 
 from simple_jukebox.controllers import BluetoothSpeaker, RgbController, SystemVolume, VlcPlayer
 from simple_jukebox.engine import Command, CommandEngine, CommandType
+from simple_jukebox.services import JukeboxServices
 from simple_jukebox.state_machine import StateMachine
 
 
@@ -20,14 +21,16 @@ def create_app(
     bluetooth = bluetooth or BluetoothSpeaker()
     volume = volume or SystemVolume()
     rgb = rgb or RgbController()
-    machine = StateMachine(player, bluetooth)
-    engine = CommandEngine(machine, volume, rgb)
+    services = JukeboxServices(player, bluetooth, volume, rgb)
+    machine = StateMachine(services)
+    engine = CommandEngine(machine, services)
 
     app = Flask(__name__)
     app.config["machine"] = machine
     app.config["player"] = player
     app.config["volume"] = volume
     app.config["rgb"] = rgb
+    app.config["services"] = services
     app.config["engine"] = engine
     atexit.register(engine.close)
 

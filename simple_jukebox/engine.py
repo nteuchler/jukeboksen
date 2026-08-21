@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from simple_jukebox.services import JukeboxServices
+
 
 class CommandType(str, Enum):
     CHANGE_MODE = "change_mode"
@@ -36,10 +38,9 @@ class _QueuedCommand:
 class CommandEngine:
     """Process every state-changing command sequentially on one async queue."""
 
-    def __init__(self, machine: Any, volume: Any, rgb: Any) -> None:
+    def __init__(self, machine: Any, services: JukeboxServices) -> None:
         self.machine = machine
-        self.volume = volume
-        self.rgb = rgb
+        self.services = services
         self._loop: asyncio.AbstractEventLoop | None = None
         self._queue: asyncio.Queue[_QueuedCommand] | None = None
         self._incoming: queue.Queue[_QueuedCommand] = queue.Queue()
@@ -113,12 +114,11 @@ class CommandEngine:
         if command.type is CommandType.TOGGLE_MUTE:
             return self.machine.toggle_mute()
         if command.type is CommandType.SET_VOLUME:
-            return self.volume.set(command.value)
+            return self.services.volume.set(command.value)
         if command.type is CommandType.SET_RGB:
-            return self.rgb.set_mode(command.value)
+            return self.services.rgb.set_mode(command.value)
         if command.type is CommandType.SHUTDOWN:
             self.machine.close()
-            if hasattr(self.rgb, "close"):
-                self.rgb.close()
+            self.services.rgb.close()
             return None
         raise ValueError(f"Unknown command type: {command.type}")

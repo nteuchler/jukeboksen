@@ -72,3 +72,23 @@ Current command flow:
 The next planned slice is to formalize Bluetooth, audio, volume, and RGB behind
 service interfaces so the state machine depends on contracts rather than
 concrete Raspberry Pi controllers.
+
+## Slice 3: service interfaces
+
+### Completed
+
+`simple_jukebox.services` now defines hardware-independent protocols for audio,
+Bluetooth, system volume, and RGB lighting. `JukeboxServices` groups those
+contracts into one immutable dependency container used by both `StateMachine`
+and `CommandEngine`. Flask's application factory is the composition boundary
+that constructs and injects the concrete Raspberry Pi adapters.
+
+Tests inject lightweight fake services through the same container, so core and
+web behavior remain testable without VLC, BlueZ, PulseAudio, or LED hardware.
+
+Current dependency flow:
+
+`app.py -> JukeboxServices(protocols) -> StateMachine/CommandEngine -> adapters`
+
+The next planned slice is centralized status and event logging so the website
+can expose command progress, service failures, and recent backend messages.

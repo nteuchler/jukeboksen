@@ -25,6 +25,8 @@ Bluetooth playback.
 All state-changing web requests are submitted as typed commands to the async
 command engine. Its queue processes one mode, playback, volume, or RGB change at
 a time on a dedicated worker thread; Flask does not mutate controllers directly.
+The core receives audio, Bluetooth, volume, and RGB through the protocols in
+`services.py`; Raspberry Pi controller classes are injected only by `app.py`.
 
 Run the focused tests with:
 

@@ -29,6 +29,9 @@ class FakeRgb:
             raise ValueError("bad RGB mode")
         self.mode = mode
 
+    def close(self):
+        self.mode = "off"
+
 
 def make_app():
     return create_app(

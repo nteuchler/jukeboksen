@@ -1,4 +1,16 @@
 from simple_jukebox.state_machine import StateMachine
+from simple_jukebox.services import JukeboxServices
+
+
+class UnusedService:
+    pass
+
+
+def make_machine(player=None, bluetooth=None):
+    return StateMachine(JukeboxServices(
+        player or FakePlayer(), bluetooth or FakeBluetooth(),
+        UnusedService(), UnusedService(),
+    ))
 
 
 class FakePlayer:
@@ -37,7 +49,7 @@ class FakeBluetooth:
 def test_switching_modes_cleans_up_previous_mode():
     player = FakePlayer()
     bluetooth = FakeBluetooth()
-    machine = StateMachine(player, bluetooth)
+    machine = make_machine(player, bluetooth)
 
     machine.change_mode("local_files")
     machine.play("song.mp3")
@@ -51,7 +63,7 @@ def test_switching_modes_cleans_up_previous_mode():
 
 
 def test_audio_requires_local_files_mode():
-    machine = StateMachine(FakePlayer(), FakeBluetooth())
+    machine = make_machine()
     try:
         machine.play("song.mp3")
     except RuntimeError as error:
