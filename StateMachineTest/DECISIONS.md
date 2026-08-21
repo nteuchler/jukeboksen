@@ -49,3 +49,26 @@ The next planned slice is a minimal Flask server that reads `status()` and
 sends commands through `send()`. It should be tested from a browser and with
 `curl` before any Raspberry Pi service is connected.
 
+## Slice 2: Flask-to-state-machine command bridge
+
+### Completed
+
+The working `simple_jukebox` Flask application now submits every mutating web
+request as a typed command to `CommandEngine`. A dedicated event-loop thread
+drains the async command queue and handles commands sequentially. Mode changes,
+local playback, stop, mute, system volume, RGB selection, and shutdown all use
+this path. Read-only status and media-list requests remain direct queries.
+
+The managed Pi environment blocks the event loop's usual cross-thread wakeup
+socket, so Flask writes to a thread-safe ingress queue. The engine drains that
+into its `asyncio.Queue` on a short async tick. Hardware actions still execute
+on only one engine thread, and tests verify they do not execute on Flask's
+calling thread.
+
+Current command flow:
+
+`Flask request -> typed command -> ingress -> asyncio queue -> CommandEngine -> StateMachine/services`
+
+The next planned slice is to formalize Bluetooth, audio, volume, and RGB behind
+service interfaces so the state machine depends on contracts rather than
+concrete Raspberry Pi controllers.

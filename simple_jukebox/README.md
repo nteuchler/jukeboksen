@@ -22,6 +22,10 @@ The Equalizer
 listens to the common speaker-output monitor, so it reacts to local files and
 Bluetooth playback.
 
+All state-changing web requests are submitted as typed commands to the async
+command engine. Its queue processes one mode, playback, volume, or RGB change at
+a time on a dedicated worker thread; Flask does not mutate controllers directly.
+
 Run the focused tests with:
 
 ```bash
