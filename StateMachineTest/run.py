@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from jukebox.state_machine import Command, CommandType, Mode, StateMachine
+from state_machine import Command, CommandType, Mode, StateMachine
 
 
 HELP = """Commands:
