@@ -9,30 +9,52 @@ from flask import Flask, jsonify, render_template, request
 from simple_jukebox.controllers import BluetoothSpeaker, RgbController, SystemVolume, VlcPlayer
 from simple_jukebox.engine import Command, CommandEngine, CommandType
 from simple_jukebox.services import JukeboxServices
+from simple_jukebox.input_service import InputService
+from simple_jukebox.oled import OledService
+from simple_jukebox.nfc import NfcReader
 from simple_jukebox.state_machine import StateMachine
 
 
 def create_app(
-    *, player=None, bluetooth=None, volume=None, rgb=None,
+    *, player=None, bluetooth=None, volume=None, rgb=None, nfc=None,
     media_folder: Path | None = None,
 ) -> Flask:
     app_folder = Path(__file__).resolve().parent
+    app = Flask(__name__)
     player = player or VlcPlayer(media_folder or app_folder / "media")
     bluetooth = bluetooth or BluetoothSpeaker()
     volume = volume or SystemVolume()
     rgb = rgb or RgbController()
-    services = JukeboxServices(player, bluetooth, volume, rgb)
+    services = JukeboxServices(player, bluetooth, volume, rgb,
+                               nfc if nfc is not None else NfcReader())
     machine = StateMachine(services)
     engine = CommandEngine(machine, services)
+    oled = OledService(machine.status)
+    oled.start()
+    def encoder_step(direction):
+        future = engine.enqueue(Command(CommandType.ADJUST_VOLUME, direction * 5))
 
-    app = Flask(__name__)
+        def report_error(result):
+            error = result.exception()
+            if error is not None:
+                app.logger.error("Encoder volume change failed: %s", error)
+
+        future.add_done_callback(report_error)
+
+    input_service = InputService(on_encoder_step=encoder_step)
+    input_service.start()
+
     app.config["machine"] = machine
     app.config["player"] = player
     app.config["volume"] = volume
     app.config["rgb"] = rgb
     app.config["services"] = services
     app.config["engine"] = engine
+    app.config["input_service"] = input_service
+    app.config["oled"] = oled
     atexit.register(engine.close)
+    atexit.register(input_service.stop)
+    atexit.register(oled.stop)
 
     @app.get("/")
     def index():
@@ -46,6 +68,7 @@ def create_app(
         data = machine.status()
         data["volume"] = volume.get()
         data["rgb"] = rgb.status()
+        data["oled"] = oled.status()
         return data
 
     @app.get("/api/tracks")
@@ -79,6 +102,22 @@ def create_app(
     def set_rgb():
         data = request.get_json(silent=True) or {}
         return run_command(Command(CommandType.SET_RGB, data.get("mode", "")))
+
+    @app.get("/api/inputs")
+    def inputs():
+        service: InputService | None = app.config.get("input_service")
+        if not service:
+            return jsonify({"states": {}})
+        return jsonify({"states": service.get_states(), "status": service.status()})
+
+    @app.get("/api/inputs/log")
+    def inputs_log():
+        service: InputService | None = app.config.get("input_service")
+        if not service:
+            return jsonify({"events": []})
+        # past 30 minutes
+        events = service.get_events_since(60 * 30)
+        return jsonify({"events": events})
 
     def run_command(command):
         try:

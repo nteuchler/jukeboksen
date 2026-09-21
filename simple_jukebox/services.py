@@ -47,6 +47,14 @@ class RgbService(Protocol):
     def close(self) -> None: ...
 
 
+class NfcService(Protocol):
+    def start(self) -> None: ...
+
+    def stop(self) -> None: ...
+
+    def status(self) -> dict[str, object]: ...
+
+
 @dataclass(frozen=True)
 class JukeboxServices:
     """All side-effecting adapters available to the application core."""
@@ -55,3 +63,4 @@ class JukeboxServices:
     bluetooth: BluetoothService
     volume: VolumeService
     rgb: RgbService
+    nfc: NfcService | None = None

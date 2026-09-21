@@ -22,6 +22,20 @@ The Equalizer
 listens to the common speaker-output monitor, so it reacts to local files and
 Bluetooth playback.
 
+Rotating the encoder (A on BCM4, B on BCM17) adjusts the output volume by
+5 percentage points per full quadrature cycle, limited to 0–100%.
+The input log shows `ENCODER_RIGHT` / `ENCODER_LEFT` for rotation.
+
+The I2C OLED automatically shows the current mode, playback/mute or Bluetooth
+readiness, track, and machine message. It refreshes every half second without a
+browser connected; long text is shortened to fit. The default display is an
+NFP1315-61AY (SSD1315), 128×64 on bus 1 at address 0x3C. Set `JUKEBOX_OLED_DRIVER=sh1106`
+for an SH1106 display, or set `JUKEBOX_OLED_BUS` and `JUKEBOX_OLED_ADDRESS`
+to match your wiring. Enable I2C on the Pi and ensure the app user can access
+`/dev/i2c-1`. Missing hardware does not prevent the app from starting: OLED
+failures appear in the log and `/api/status` under `oled`, with retries every
+five seconds. Drivers use [Luma.OLED](https://luma-oled.readthedocs.io/en/latest/python-usage.html).
+
 All state-changing web requests are submitted as typed commands to the async
 command engine. Its queue processes one mode, playback, volume, or RGB change at
 a time on a dedicated worker thread; Flask does not mutate controllers directly.
@@ -32,4 +46,30 @@ Run the focused tests with:
 
 ```bash
 simple_jukebox/.venv/bin/python -m pytest -q simple_jukebox/tests
+```
+
+### NFC reading state
+
+Select **NFC reader** on the control page (or POST `{"mode":"nfc"}` to
+`/api/mode`). The reader scans in the background only while this state is active.
+The web page and OLED show tag UIDs; `/api/status` includes `nfc` connection/error,
+current `uid`, `last_uid`, and `detections` fields. A held tag counts once;
+removing and presenting it again, or presenting a different UID, counts again.
+Entering the state resets the previous scan results. This reads ISO14443A tag
+UIDs, not NDEF contents, and does not yet map tags to music.
+
+The driver currently assumes a **PN532 configured for I2C**, using bus 1 and
+7-bit address `0x24`. SDA/SCL share GPIO2/GPIO3 with the OLED as described in
+`HARDWARE_PINOUT.md`. Install the updated requirements and enable I2C on the Pi.
+Override `JUKEBOX_NFC_BUS` or `JUKEBOX_NFC_ADDRESS` if needed. Missing readers or
+driver packages appear as NFC errors; the worker retries every five seconds.
+Driver API: https://docs.circuitpython.org/projects/pn532/en/latest/api.html
+
+On this Pi, keep `rpi-lgpio` as the GPIO backend. If installing the NFC
+requirements also installs `RPi.GPIO` through Blinka, remove that conflicting
+package and restore the backend:
+
+```bash
+simple_jukebox/.venv/bin/pip uninstall -y RPi.GPIO
+simple_jukebox/.venv/bin/pip install --force-reinstall --no-deps rpi-lgpio
 ```

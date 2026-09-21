@@ -19,6 +19,7 @@
   <h1>Jukeboks control</h1>
   <section>
     <h2>Mode</h2>
+    <button class="mode" data-mode="nfc">NFC reader</button>
     <button class="mode" data-mode="idle">Idle</button>
     <button class="mode" data-mode="local_files">Local files</button>
     <button class="mode" data-mode="bluetooth">Bluetooth speaker</button>
@@ -49,7 +50,15 @@
     <strong id="mode">Loading…</strong>
     <p id="message"></p>
     <p id="details"></p>
+    <p id="nfc-status"></p>
     <p id="error"></p>
+  </section>
+  <section>
+    <h2>Inputs</h2>
+    <p id="inputs-status"></p>
+    <div id="inputs-states">Loading inputs…</div>
+    <h3>Recent events (30 minutes)</h3>
+    <div id="inputs-log" style="max-height:220px; overflow:auto; font-family: monospace; background:#f7f7f7; padding:.5rem; border-radius:6px;">Loading…</div>
   </section>
   <script>
     async function api(url, body) {
@@ -69,10 +78,39 @@
       document.querySelector('#volume-value').textContent = `${volume.value}%`;
       document.querySelectorAll('.rgb').forEach(button => button.classList.toggle('active', button.dataset.rgb === status.rgb.mode));
       document.querySelector('#rgb-error').textContent = status.rgb.error || '';
+      const nfc = status.nfc || {};
+      document.querySelector('#nfc-status').textContent = status.mode !== 'nfc' ? ''
+        : nfc.error ? `NFC error: ${nfc.error}`
+        : !nfc.connected ? 'Connecting to NFC reader…'
+        : `NFC: ${nfc.uid || 'waiting for tag'} | Last UID: ${nfc.last_uid || 'none'} | Detections: ${nfc.detections}`;
+      // fetch inputs
+      try {
+        const inputs = await api('/api/inputs');
+        const states = inputs.states || {};
+        const inputStatus = inputs.status || {};
+        document.querySelector('#inputs-status').textContent = inputStatus.error
+          ? `GPIO error: ${inputStatus.error}`
+          : `GPIO backend: ${inputStatus.backend || 'unknown'}`;
+        const container = document.querySelector('#inputs-states');
+        container.innerHTML = Object.keys(states).map(k => `<span style="display:inline-block;min-width:120px;">${k}: <strong>${states[k] ? 'PRESSED' : 'released'}</strong></span>`).join(' ');
+      } catch (e) {
+        document.querySelector('#inputs-status').textContent = `Input status unavailable: ${e.message}`;
+        document.querySelector('#inputs-states').textContent = 'Unable to read inputs';
+      }
     }
     async function act(url, body) {
       document.querySelector('#error').textContent = '';
       try { await api(url, body); await refresh(); } catch (error) { document.querySelector('#error').textContent = error.message; }
+    }
+    async function refreshLog() {
+      try {
+        const log = await api('/api/inputs/log');
+        const el = document.querySelector('#inputs-log');
+        if (!log.events) { el.textContent = 'No events'; return; }
+        el.innerHTML = log.events.slice().reverse().map(e => `${e.time}  ${e.event}`).join('\n');
+      } catch (e) {
+        // ignore
+      }
     }
     document.querySelectorAll('.mode').forEach(button => button.onclick = () => act('/api/mode', {mode: button.dataset.mode}));
     document.querySelector('#play').onclick = () => act('/api/play', {track: document.querySelector('#tracks').value});
@@ -84,6 +122,7 @@
     document.querySelectorAll('.rgb').forEach(button => button.onclick = () => act('/api/rgb', {mode: button.dataset.rgb}));
     api('/api/tracks').then(data => { document.querySelector('#tracks').innerHTML = data.tracks.map(track => `<option>${track}</option>`).join(''); });
     refresh(); setInterval(refresh, 1000);
+    refreshLog(); setInterval(refreshLog, 5000);
   </script>
 </body>
 </html>

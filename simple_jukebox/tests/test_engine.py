@@ -7,6 +7,25 @@ from simple_jukebox.state_machine import StateMachine
 from simple_jukebox.tests.test_web import FakeRgb, FakeVolume
 
 
+def test_encoder_volume_commands_accumulate_and_clamp():
+    volume = FakeVolume()
+    services = JukeboxServices(FakePlayer(), FakeBluetooth(), volume, FakeRgb())
+    engine = CommandEngine(StateMachine(services), services)
+    try:
+        futures = [engine.enqueue(Command(CommandType.ADJUST_VOLUME, 5)) for _ in range(3)]
+        for future in futures:
+            future.result(timeout=2)
+        assert volume.value == 55
+        engine.submit(Command(CommandType.SET_VOLUME, 98))
+        engine.submit(Command(CommandType.ADJUST_VOLUME, 5))
+        assert volume.value == 100
+        engine.submit(Command(CommandType.SET_VOLUME, 2))
+        engine.submit(Command(CommandType.ADJUST_VOLUME, -5))
+        assert volume.value == 0
+    finally:
+        engine.close()
+
+
 def test_engine_routes_commands_to_services_on_its_worker_thread():
     player = FakePlayer()
     bluetooth = FakeBluetooth()

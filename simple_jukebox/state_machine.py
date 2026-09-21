@@ -10,6 +10,7 @@ class Mode(str, Enum):
     IDLE = "idle"
     LOCAL_FILES = "local_files"
     BLUETOOTH = "bluetooth"
+    NFC = "nfc"
 
 
 class StateMachine:
@@ -30,10 +31,17 @@ class StateMachine:
         with self._lock:
             if target == self.mode:
                 return
+            if target is Mode.NFC and self.services.nfc is None:
+                raise RuntimeError("NFC reader is not configured")
             self._leave_current_mode()
+            self.mode = Mode.IDLE
+            self.message = "Ready"
             if target is Mode.BLUETOOTH:
                 self.services.bluetooth.start()
                 self.message = "Bluetooth is discoverable as Jukeboks"
+            elif target is Mode.NFC:
+                self.services.nfc.start()
+                self.message = "Present an NFC tag"
             elif target is Mode.LOCAL_FILES:
                 self.message = "Choose a local audio file"
             else:
@@ -66,15 +74,20 @@ class StateMachine:
                 "playing": self.services.audio.playing,
                 "track": self.services.audio.current_track,
                 "muted": self.services.audio.muted,
+                "nfc": self.services.nfc.status() if self.services.nfc else None,
                 "bluetooth_active": self.services.bluetooth.active,
             }
 
     def close(self) -> None:
         with self._lock:
             self._leave_current_mode()
+            self.mode = Mode.IDLE
+            self.message = "Ready"
 
     def _leave_current_mode(self) -> None:
         if self.mode is Mode.LOCAL_FILES:
             self.services.audio.stop()
         if self.mode is Mode.BLUETOOTH:
             self.services.bluetooth.stop()
+        if self.mode is Mode.NFC and self.services.nfc is not None:
+            self.services.nfc.stop()

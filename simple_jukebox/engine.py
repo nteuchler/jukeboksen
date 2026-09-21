@@ -19,6 +19,7 @@ class CommandType(str, Enum):
     STOP = "stop"
     TOGGLE_MUTE = "toggle_mute"
     SET_VOLUME = "set_volume"
+    ADJUST_VOLUME = "adjust_volume"
     SET_RGB = "set_rgb"
     SHUTDOWN = "shutdown"
 
@@ -57,6 +58,10 @@ class CommandEngine:
 
     def submit(self, command: Command, timeout: float = 10.0) -> Any:
         """Thread-safely enqueue a command and wait for its handled result."""
+        return self.enqueue(command).result(timeout=timeout)
+
+    def enqueue(self, command: Command) -> Future:
+        """Enqueue without blocking hardware input sampling."""
         if self._closed:
             raise RuntimeError("Jukebox command engine is closed")
         if self._loop is None or self._queue is None:
@@ -64,7 +69,7 @@ class CommandEngine:
         result: Future = Future()
         queued = _QueuedCommand(command, result)
         self._incoming.put(queued)
-        return result.result(timeout=timeout)
+        return result
 
     def close(self) -> None:
         if self._closed:
@@ -115,6 +120,10 @@ class CommandEngine:
             return self.machine.toggle_mute()
         if command.type is CommandType.SET_VOLUME:
             return self.services.volume.set(command.value)
+        if command.type is CommandType.ADJUST_VOLUME:
+            return self.services.volume.set(
+                max(0, min(100, self.services.volume.get() + command.value))
+            )
         if command.type is CommandType.SET_RGB:
             return self.services.rgb.set_mode(command.value)
         if command.type is CommandType.SHUTDOWN:
