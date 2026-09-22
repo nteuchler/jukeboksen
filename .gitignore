@@ -8,3 +8,4 @@ simple_jukebox/media/*
 !simple_jukebox/media/.gitkeep
 !simple_jukebox/media/testmp3.mp3
 node_modules/
+Text2Speech/output/*
