@@ -84,39 +84,80 @@ def test_arcade_press_is_logged_only_after_it_is_stably_low():
     service.stop()
 
 
-def test_release_is_also_debounced_and_does_not_stick_pressed():
+@pytest.mark.parametrize("name, pin", [("ARCADE_1", 5), ("ENCODER_PRESS", 16)])
+def test_release_is_also_debounced_and_does_not_stick_pressed(name, pin):
     gpio = FakeGPIO()
     service = InputService(gpio=gpio, poll_seconds=10)
     service.start()
 
-    gpio.values[5] = False
+    assert (pin, gpio.IN, gpio.PUD_UP) in gpio.setups
+    gpio.values[pin] = False
     service._poll_once(4.0)
     service._poll_once(4.021)
-    assert service.get_states()["ARCADE_1"] is True
+    assert service.get_states()[name] is True
 
-    gpio.values[5] = True
+    gpio.values[pin] = True
     service._poll_once(5.0)
     service._poll_once(5.021)
-    assert service.get_states()["ARCADE_1"] is False
+    assert service.get_states()[name] is False
     service.stop()
 
 
-def test_input_held_low_at_start_must_release_before_logging_a_press():
+@pytest.mark.parametrize("name, pin", [("ARCADE_1", 5), ("ENCODER_PRESS", 16)])
+def test_input_held_low_at_start_must_release_before_logging_a_press(name, pin):
     gpio = FakeGPIO()
-    gpio.values[5] = False
+    gpio.values[pin] = False
     service = InputService(gpio=gpio, poll_seconds=10)
     service.start()
 
     now = time.monotonic()
     service._poll_once(now + 0.021)
-    assert service.get_states()["ARCADE_1"] is True
+    assert service.get_states()[name] is True
     assert service.get_events_since(1) == []
 
-    gpio.values[5] = True
+    gpio.values[pin] = True
     service._poll_once(now + 1.0)
     service._poll_once(now + 1.021)
-    gpio.values[5] = False
+    gpio.values[pin] = False
     service._poll_once(now + 2.0)
     service._poll_once(now + 2.021)
-    assert service.get_events_since(1)[-1]["event"] == "ARCADE_1"
+    assert service.get_events_since(1)[-1]["event"] == name
     service.stop()
+
+
+def test_encoder_press_toggles_once_per_debounced_press():
+    gpio = FakeGPIO()
+    presses = []
+    service = InputService(gpio=gpio, poll_seconds=10,
+                           on_encoder_press=lambda: presses.append(True))
+    service.start()
+    try:
+        for now, high in [(1, False), (1.01, True), (2, False),
+                          (2.021, False), (3, False), (4, True),
+                          (4.021, True), (5, False), (5.021, False)]:
+            gpio.values[16] = high
+            service._poll_once(now)
+        assert presses == [True, True]
+    finally:
+        service.stop()
+
+
+def test_arcade_callback_only_fires_for_debounced_press():
+    gpio = FakeGPIO()
+    presses = []
+    service = InputService(gpio=gpio, poll_seconds=10, on_arcade_press=presses.append)
+    service.start()
+    try:
+        gpio.values[5] = False
+        service._poll_once(1)
+        gpio.values[5] = True
+        service._poll_once(1.01)
+        assert presses == []
+        for pin, now in [(6, 2), (5, 3)]:
+            gpio.values[pin] = False
+            service._poll_once(now)
+            service._poll_once(now + .021)
+            service._poll_once(now + .1)
+        assert presses == [2, 1]
+    finally:
+        service.stop()

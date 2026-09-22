@@ -21,10 +21,10 @@ FRAME_DELAY = 0.03
 SIDE_LENGTH = min(30, LED_COUNT // 2)
 EQUALIZER_SIDE_LENGTH = min(SIDE_LENGTH + 15, LED_COUNT // 2)
 
-# Calibrated from the jukebox's AUX monitor, where normal playback measures
-# roughly -20 to -13 dB RMS. Keeping that range away from either limit makes
-# verses, choruses, and beats visibly grow and shrink instead of saturating.
-EQUALIZER_NOISE_FLOOR_DB = -26.0
+# Include the quieter PCM5102A monitor (roughly -41 to -33 dB RMS in
+# measured playback), while retaining headroom for AUX and louder tracks.
+# PulseAudio software volume also lowers the I2S monitor's sample levels.
+EQUALIZER_NOISE_FLOOR_DB = -55.0
 EQUALIZER_FULL_SCALE_DB = -11.0
 EQUALIZER_RESPONSE_CURVE = 0.85
 
@@ -153,7 +153,7 @@ def _pactl(environment: dict[str, str], *arguments: str) -> str:
 
 
 def _capture_device(environments):
-    """Select AUX for local/looped-back audio, or direct Bluetooth audio."""
+    """Follow the default output (including I2S), or direct Bluetooth audio."""
     for environment in environments:
         default_sink = _pactl(environment, "get-default-sink")
         sources = [
@@ -279,3 +279,19 @@ def clear_strip() -> None:
     for pixel in range(LED_COUNT):
         strip.setPixelColor(pixel, Color(0, 0, 0))
     strip.show()
+
+
+def run_red(stop_event: threading.Event) -> None:
+    _run_solid(stop_event, Color(255, 0, 0))
+
+
+def run_green(stop_event: threading.Event) -> None:
+    _run_solid(stop_event, Color(0, 255, 0))
+
+
+def _run_solid(stop_event: threading.Event, color) -> None:
+    strip = _get_strip()
+    for pixel in range(LED_COUNT):
+        strip.setPixelColor(pixel, color)
+    strip.show()
+    stop_event.wait()

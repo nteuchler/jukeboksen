@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from typing import Callable, Deque, Dict, List, Tuple
 
 PIN_MAP = {
-    "VOLUME_UP": 27,
-    "VOLUME_DOWN": 22,
+    "STOP": 27,
+    "PLAY_PAUSE": 22,
     "NAV_LEFT": 23,
     "NAV_RIGHT": 24,
     "EXTRA_BUTTON": 25,
@@ -41,12 +41,17 @@ class InputService:
         debounce_seconds: float = 0.02,
         poll_seconds: float = 0.001,
         on_encoder_step: Callable[[int], None] | None = None,
+        on_encoder_press: Callable[[], None] | None = None,
+        on_arcade_press: Callable[[int], None] | None = None,
     ) -> None:
         self._max_events = max_events
         self._on_encoder_step = on_encoder_step
+        self._on_encoder_press = on_encoder_press
+        self._on_arcade_press = on_arcade_press
         self._encoder_previous: int | None = None
         self._encoder_steps = 0
         self._events: Deque[Tuple[float, str]] = deque(maxlen=max_events)
+        self._coin_count = 0
         self._states: Dict[str, bool] = {name: False for name in PIN_MAP}
         self._lock = threading.RLock()
         self._running = False
@@ -135,7 +140,7 @@ class InputService:
         if not self._use_gpio or self._gpio is None:
             return
         self._poll_encoder()
-        for name in tuple(self._configured_inputs):
+        for name in sorted(self._configured_inputs):
             if name in {"ENCODER_A", "ENCODER_B"}:
                 continue
             pin = PIN_MAP[name]
@@ -156,6 +161,18 @@ class InputService:
                     if pressed:
                         if self._armed[name]:
                             self._events.append((time.time(), name))
+                            if name == "COIN":
+                                self._coin_count += 1
+                            if name in {"ARCADE_1", "ARCADE_2"} and self._on_arcade_press is not None:
+                                try:
+                                    self._on_arcade_press(int(name[-1]))
+                                except Exception:
+                                    LOGGER.exception("Arcade command failed")
+                            if name == "ENCODER_PRESS" and self._on_encoder_press is not None:
+                                try:
+                                    self._on_encoder_press()
+                                except Exception:
+                                    LOGGER.exception("Encoder mute command failed")
                     else:
                         self._armed[name] = True
 
@@ -206,7 +223,10 @@ class InputService:
 
     def status(self) -> Dict[str, object]:
         """Return enough diagnostics to distinguish real GPIO from mock mode."""
+        with self._lock:
+            coin_count = self._coin_count
         return {
+            "coin_count": coin_count,
             "running": self._running,
             "backend": "RPi.GPIO" if self._use_gpio else "mock",
             "configured_inputs": sorted(self._configured_inputs),
@@ -227,6 +247,8 @@ class InputService:
         with self._lock:
             ts = time.time()
             self._events.append((ts, name))
+            if name == "COIN":
+                self._coin_count += 1
             # set simulated transient state
             self._states[name] = True
             # schedule reset shortly after so UI shows transient press

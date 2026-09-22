@@ -7,6 +7,13 @@ from simple_jukebox.tests.test_state_machine import FakeBluetooth, FakePlayer
 class FakeVolume:
     def __init__(self):
         self.value = 40
+        self.muted = False
+
+    def is_muted(self):
+        return self.muted
+
+    def toggle_mute(self):
+        self.muted = not self.muted
 
     def get(self):
         return self.value
@@ -83,3 +90,25 @@ def test_default_media_folder_is_dedicated_to_user_audio():
 
     expected = Path(__file__).resolve().parents[1] / "media"
     assert app.config["player"].media_folder == expected
+
+
+def test_encoder_mute_is_reflected_in_web_status_and_preserves_volume():
+    from simple_jukebox.engine import Command, CommandType
+
+    app = make_app()
+    client = app.test_client()
+    engine = app.config['engine']
+    try:
+        for source, muted in [('encoder', True), ('website', False),
+                              ('website', True), ('encoder', False)]:
+            if source == 'encoder':
+                engine.submit(Command(CommandType.TOGGLE_OUTPUT_MUTE))
+            else:
+                response = client.post('/api/mute', json={})
+                assert response.status_code == 200
+                assert response.get_json()['status']['output_muted'] is muted
+            status = client.get('/api/status').get_json()
+            assert status['output_muted'] is muted
+            assert status['volume'] == 40
+    finally:
+        engine.close()

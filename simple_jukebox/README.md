@@ -73,3 +73,18 @@ package and restore the backend:
 simple_jukebox/.venv/bin/pip uninstall -y RPi.GPIO
 simple_jukebox/.venv/bin/pip install --force-reinstall --no-deps rpi-lgpio
 ```
+
+### Music quiz
+
+Select **Music quiz**, connect the phone to **Jukeboks**, and play music.
+The first debounced arcade press wins: **ARCADE_1 turns the strip red** and
+**ARCADE_2 turns it green**. The jukebox requests Bluetooth AVRCP pause and plays
+a short synthesized buzzer through the current output. Further presses are
+ignored until the phone reports paused/stopped and then playing again. Resume
+from the phone to restore the equalizer and start the next round.
+
+Remote pause and automatic re-arming require the phone/player to expose BlueZ
+`MediaPlayer1` controls and playback status. Failures appear on the website;
+manual pause then resume works when status is available. Leaving quiz mode
+stops the buzzer and Bluetooth speaker and restores the previous RGB effect.
+The buzzer respects the shared output volume and mute setting.

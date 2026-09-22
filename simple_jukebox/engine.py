@@ -20,6 +20,8 @@ class CommandType(str, Enum):
     TOGGLE_MUTE = "toggle_mute"
     SET_VOLUME = "set_volume"
     ADJUST_VOLUME = "adjust_volume"
+    TOGGLE_OUTPUT_MUTE = "toggle_output_mute"
+    ARCADE_PRESS = "arcade_press"
     SET_RGB = "set_rgb"
     SHUTDOWN = "shutdown"
 
@@ -96,6 +98,7 @@ class CommandEngine:
                 except queue.Empty:
                     break
             if self._queue.empty():
+                self.machine.poll_quiz()
                 await asyncio.sleep(0.01)
                 continue
             queued = self._queue.get_nowait()
@@ -120,11 +123,17 @@ class CommandEngine:
             return self.machine.toggle_mute()
         if command.type is CommandType.SET_VOLUME:
             return self.services.volume.set(command.value)
+        if command.type is CommandType.TOGGLE_OUTPUT_MUTE:
+            return self.services.volume.toggle_mute()
+        if command.type is CommandType.ARCADE_PRESS:
+            return self.machine.arcade_press(command.value)
         if command.type is CommandType.ADJUST_VOLUME:
             return self.services.volume.set(
                 max(0, min(100, self.services.volume.get() + command.value))
             )
         if command.type is CommandType.SET_RGB:
+            if self.machine.mode.value == "music_quiz":
+                raise RuntimeError("Music quiz controls the RGB lights; leave quiz mode to change effects")
             return self.services.rgb.set_mode(command.value)
         if command.type is CommandType.SHUTDOWN:
             self.machine.close()

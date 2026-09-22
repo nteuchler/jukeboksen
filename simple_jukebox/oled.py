@@ -11,6 +11,12 @@ LOGGER = logging.getLogger(__name__)
 
 def status_lines(status):
     mode = status.get("mode", "idle")
+    if mode == "music_quiz":
+        quiz = status.get("quiz") or {}
+        winner = quiz.get("winner")
+        return ["Music quiz", f"Player {winner}!" if winner else "Ready to buzz",
+                "Red" if winner == 1 else "Green" if winner == 2 else "1: Red / 2: Green",
+                str(quiz.get("error") or ("Resume on phone" if winner else "Play music on phone"))]
     title = {"idle": "Idle", "local_files": "Local files", "bluetooth": "Bluetooth"}.get(mode, str(mode))
     if mode == "nfc":
         nfc = status.get("nfc") or {}

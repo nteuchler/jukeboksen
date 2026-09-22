@@ -4,12 +4,13 @@ from simple_jukebox.rgb import EQUALIZER_SIDE_LENGTH, SIDE_LENGTH, level_to_heig
 def test_equalizer_uses_full_range_and_preserves_amplitude_changes():
     heights = [
         level_to_height(10 ** (decibels / 20))
-        for decibels in (-28, -26, -24, -20, -16, -13, -11)
+        for decibels in (-60, -55, -48, -41, -37, -33, -20, -13, -11)
     ]
 
     assert heights == sorted(heights)
     assert heights[0] == 0
-    assert 20 <= heights[3] <= 23
-    assert heights[5] >= 39
+    assert 15 <= heights[3] <= 20
+    assert heights[3] < heights[4] < heights[5]
+    assert heights[-2] >= 39
     assert heights[-1] == EQUALIZER_SIDE_LENGTH
     assert EQUALIZER_SIDE_LENGTH == SIDE_LENGTH + 15

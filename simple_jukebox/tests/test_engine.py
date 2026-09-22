@@ -56,3 +56,18 @@ def test_engine_routes_commands_to_services_on_its_worker_thread():
         assert handled_threads[0] != caller_thread
     finally:
         engine.close()
+
+
+def test_encoder_mutes_output_in_any_mode_without_changing_volume():
+    volume = FakeVolume()
+    toggles = []
+    volume.toggle_mute = lambda: toggles.append(True)
+    services = JukeboxServices(FakePlayer(), FakeBluetooth(), volume, FakeRgb())
+    engine = CommandEngine(StateMachine(services), services)
+    try:
+        engine.submit(Command(CommandType.TOGGLE_OUTPUT_MUTE))
+        engine.submit(Command(CommandType.TOGGLE_OUTPUT_MUTE))
+        assert toggles == [True, True]
+        assert volume.value == 40
+    finally:
+        engine.close()

@@ -11,31 +11,41 @@
     button.active { background: #176b55; color: white; }
     .control-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
     input[type="range"] { flex: 1; min-width: 180px; padding-left: 0; padding-right: 0; }
+    #volume:disabled { accent-color: #888; filter: grayscale(1); opacity: .5; cursor: not-allowed; }
+    #volume:disabled + output { color: #777; }
     output { min-width: 3.5rem; font-weight: bold; }
     #error { color: #a21d1d; }
+    #coin-count { font-size: 2.5rem; color: #176b55; }
   </style>
 </head>
 <body>
   <h1>Jukeboks control</h1>
+  <section aria-labelledby="coin-heading">
+    <h2 id="coin-heading">Coins detected</h2>
+    <output id="coin-count" aria-live="polite" aria-label="Coins detected">—</output>
+    <p>Total since the app started.</p>
+  </section>
   <section>
     <h2>Mode</h2>
     <button class="mode" data-mode="nfc">NFC reader</button>
     <button class="mode" data-mode="idle">Idle</button>
     <button class="mode" data-mode="local_files">Local files</button>
     <button class="mode" data-mode="bluetooth">Bluetooth speaker</button>
+    <button class="mode" data-mode="music_quiz">Music quiz</button>
+    <p id="quiz-status" hidden aria-live="polite"></p>
   </section>
   <section>
     <h2>Local music</h2>
     <select id="tracks"></select>
     <button id="play">Play</button>
     <button id="stop">Stop</button>
-    <button id="mute">Mute / sound on</button>
   </section>
   <section>
     <h2>Volume</h2>
+    <button id="mute" aria-pressed="false">Mute</button>
     <div class="control-row">
       <input id="volume" type="range" min="0" max="100" step="1" aria-label="Output volume">
-      <output id="volume-value" for="volume">--%</output>
+      <output id="volume-value" for="volume" aria-live="polite">--%</output>
     </div>
   </section>
   <section>
@@ -71,11 +81,22 @@
       const status = await api('/api/status');
       document.querySelector('#mode').textContent = `Mode: ${status.mode}`;
       document.querySelector('#message').textContent = status.message;
-      document.querySelector('#details').textContent = status.playing ? `Playing: ${status.track}${status.muted ? ' (muted)' : ''}` : status.bluetooth_active ? 'Bluetooth active' : 'Not playing';
+      const quiz = document.querySelector('#quiz-status');
+      quiz.hidden = status.mode !== 'music_quiz';
+      quiz.textContent = status.quiz?.error || (status.quiz?.winner
+        ? `Player ${status.quiz.winner} wins the buzz! Resume on your phone for the next round.`
+        : 'Connect your phone to Jukeboks and play music. Arcade 1 = red; Arcade 2 = green. First press wins.');
+      document.querySelectorAll('.rgb').forEach(button => button.disabled = status.mode === 'music_quiz');
+      document.querySelector('#details').textContent = status.playing ? `Playing: ${status.track}${status.output_muted ? ' (muted)' : ''}` : status.bluetooth_active ? 'Bluetooth active' : 'Not playing';
       document.querySelectorAll('.mode').forEach(button => button.classList.toggle('active', button.dataset.mode === status.mode));
       const volume = document.querySelector('#volume');
-      if (document.activeElement !== volume) volume.value = status.volume;
-      document.querySelector('#volume-value').textContent = `${volume.value}%`;
+      volume.disabled = status.output_muted;
+      const mute = document.querySelector('#mute');
+      mute.textContent = status.output_muted ? 'Unmute' : 'Mute';
+      mute.setAttribute('aria-pressed', String(status.output_muted));
+      mute.classList.toggle('active', status.output_muted);
+      if (volume.disabled || document.activeElement !== volume) volume.value = status.volume;
+      document.querySelector('#volume-value').textContent = `${volume.value}%${status.output_muted ? ' (muted)' : ''}`;
       document.querySelectorAll('.rgb').forEach(button => button.classList.toggle('active', button.dataset.rgb === status.rgb.mode));
       document.querySelector('#rgb-error').textContent = status.rgb.error || '';
       const nfc = status.nfc || {};
@@ -88,11 +109,12 @@
         const inputs = await api('/api/inputs');
         const states = inputs.states || {};
         const inputStatus = inputs.status || {};
+        document.querySelector('#coin-count').textContent = inputStatus.coin_count ?? '—';
         document.querySelector('#inputs-status').textContent = inputStatus.error
           ? `GPIO error: ${inputStatus.error}`
           : `GPIO backend: ${inputStatus.backend || 'unknown'}`;
         const container = document.querySelector('#inputs-states');
-        container.innerHTML = Object.keys(states).map(k => `<span style="display:inline-block;min-width:120px;">${k}: <strong>${states[k] ? 'PRESSED' : 'released'}</strong></span>`).join(' ');
+        container.innerHTML = Object.keys(states).map(k => `<span style="display:inline-block;min-width:120px;">${({PLAY_PAUSE: 'Play / pause', STOP: 'Stop'})[k] || k}: <strong>${states[k] ? 'PRESSED' : 'released'}</strong></span>`).join(' ');
       } catch (e) {
         document.querySelector('#inputs-status').textContent = `Input status unavailable: ${e.message}`;
         document.querySelector('#inputs-states').textContent = 'Unable to read inputs';
@@ -107,7 +129,7 @@
         const log = await api('/api/inputs/log');
         const el = document.querySelector('#inputs-log');
         if (!log.events) { el.textContent = 'No events'; return; }
-        el.innerHTML = log.events.slice().reverse().map(e => `${e.time}  ${e.event}`).join('\n');
+        el.innerHTML = log.events.slice().reverse().map(e => `${e.time}  ${({PLAY_PAUSE: 'Play / pause', STOP: 'Stop'})[e.event] || e.event}`).join('\n');
       } catch (e) {
         // ignore
       }

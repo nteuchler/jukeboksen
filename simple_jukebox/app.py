@@ -12,11 +12,13 @@ from simple_jukebox.services import JukeboxServices
 from simple_jukebox.input_service import InputService
 from simple_jukebox.oled import OledService
 from simple_jukebox.nfc import NfcReader
+from simple_jukebox.quiz import BluetoothMedia, QuizBuzzer
 from simple_jukebox.state_machine import StateMachine
 
 
 def create_app(
     *, player=None, bluetooth=None, volume=None, rgb=None, nfc=None,
+    quiz_media=None, buzzer=None,
     media_folder: Path | None = None,
 ) -> Flask:
     app_folder = Path(__file__).resolve().parent
@@ -26,22 +28,30 @@ def create_app(
     volume = volume or SystemVolume()
     rgb = rgb or RgbController()
     services = JukeboxServices(player, bluetooth, volume, rgb,
-                               nfc if nfc is not None else NfcReader())
+                               nfc if nfc is not None else NfcReader(),
+                               quiz_media if quiz_media is not None else BluetoothMedia(),
+                               buzzer if buzzer is not None else QuizBuzzer())
     machine = StateMachine(services)
     engine = CommandEngine(machine, services)
     oled = OledService(machine.status)
     oled.start()
-    def encoder_step(direction):
-        future = engine.enqueue(Command(CommandType.ADJUST_VOLUME, direction * 5))
+    def encoder_command(command):
+        future = engine.enqueue(command)
 
         def report_error(result):
             error = result.exception()
             if error is not None:
-                app.logger.error("Encoder volume change failed: %s", error)
+                app.logger.error("Encoder audio command failed: %s", error)
 
         future.add_done_callback(report_error)
 
-    input_service = InputService(on_encoder_step=encoder_step)
+    input_service = InputService(
+        on_encoder_step=lambda direction: encoder_command(
+            Command(CommandType.ADJUST_VOLUME, direction * 5)
+        ),
+        on_encoder_press=lambda: encoder_command(Command(CommandType.TOGGLE_OUTPUT_MUTE)),
+        on_arcade_press=lambda player: encoder_command(Command(CommandType.ARCADE_PRESS, player)),
+    )
     input_service.start()
 
     app.config["machine"] = machine
@@ -67,6 +77,7 @@ def create_app(
     def full_status():
         data = machine.status()
         data["volume"] = volume.get()
+        data["output_muted"] = volume.is_muted()
         data["rgb"] = rgb.status()
         data["oled"] = oled.status()
         return data
@@ -91,7 +102,7 @@ def create_app(
 
     @app.post("/api/mute")
     def mute():
-        return run_command(Command(CommandType.TOGGLE_MUTE))
+        return run_command(Command(CommandType.TOGGLE_OUTPUT_MUTE))
 
     @app.post("/api/volume")
     def set_volume():

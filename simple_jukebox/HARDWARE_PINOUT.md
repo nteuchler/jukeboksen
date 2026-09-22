@@ -28,8 +28,8 @@ The Raspberry Pi uses **BCM GPIO numbering** in software.
 | Rotary encoder A / CLK | GPIO4 | 7 | Input | Internal pull-up |
 | Rotary encoder B / DT | GPIO17 | 11 | Input | Internal pull-up |
 | I2S BCLK | GPIO18 | 12 | Output | PCM5102A BCK |
-| Volume Up button | GPIO27 | 13 | Input | Button to GND, internal pull-up |
-| Volume Down button | GPIO22 | 15 | Input | Button to GND, internal pull-up |
+| Stop button | GPIO27 | 13 | Input | Button to GND, internal pull-up |
+| Play / pause button | GPIO22 | 15 | Input | Button to GND, internal pull-up |
 | Navigation Left | GPIO23 | 16 | Input | Button to GND, internal pull-up |
 | Navigation Right | GPIO24 | 18 | Input | Button to GND, internal pull-up |
 | RGB LED strip DATA | GPIO10 | 19 | Output | Existing WS2812/rpi_ws281x connection |
@@ -92,8 +92,8 @@ Inputs using this scheme:
 - GPIO4  - rotary encoder A
 - GPIO17 - rotary encoder B
 - GPIO16 - rotary encoder push
-- GPIO27 - volume up
-- GPIO22 - volume down
+- GPIO27 - stop
+- GPIO22 - play / pause
 - GPIO23 - navigation left
 - GPIO24 - navigation right
 - GPIO25 - extra button
@@ -122,6 +122,37 @@ GND              --------  push-switch common
 ```
 
 The rotary encoder is a mechanical encoder and is used with 3.3 V GPIO pull-ups.
+
+For the **HW-040 module**, use the labelled module pins (the diagram above
+describes the bare encoder contacts):
+
+| HW-040 label | Raspberry Pi connection |
+|---|---|
+| CLK | BCM4, physical pin 7 |
+| DT | BCM17, physical pin 11 |
+| SW | BCM16, physical pin 36 |
+| + | 3.3 V, physical pin 1 or 17 |
+| GND | Ground, e.g. physical pin 39 |
+
+Use 3.3 V for the module's `+` pin: its onboard pull-up resistors connect
+the signal lines to this supply. Do not connect it to 5 V for Pi GPIO use.
+SW is a normally open switch to GND: released is HIGH and pressed is LOW.
+Some modules omit the SW pull-up resistor, so the software enables the Pi's
+internal pull-up on BCM16. CLK/DT are quadrature signals and may rest LOW;
+their levels alone do not indicate a pressed push button.
+
+If ENCODER_PRESS stays pressed, `pinctrl get 16` should show `ip pu` with
+`hi` when released. A steady `lo` with `pu` already enabled requires checking
+the physical circuit, not reversing the software polarity. With power off,
+disconnect the SW lead at physical pin 36; after powering up and starting the
+app, the now-unconnected BCM16 input should read HIGH. If it does, inspect
+the lead/module for a short to GND, incorrect header placement, or a stuck
+switch. If it remains LOW, investigate the Pi header/board and other attached
+circuitry. On an unpowered, disconnected module, SW-to-GND should be open
+when released and have continuity only while pressed.
+
+References: [HW-040 supplier wiring and SW pull-up notes](https://probots.co.in/hw-040-rotary-encoder-module-with-knob-360-degree.html)
+and [encoder module circuit guide](https://www.electrokit.com/upload/quick/15/16/0285_Userguide.pdf).
 
 Suggested UI behaviour:
 
@@ -295,11 +326,11 @@ Codex should search the repository for old RGB code using GPIO18 and either upda
 
 ---
 
-# Volume buttons
+# Playback buttons
 
 ```text
-GPIO27 / pin 13 ---> Volume Up button ---> GND
-GPIO22 / pin 15 ---> Volume Down button ---> GND
+GPIO27 / pin 13 ---> Stop button ---> GND
+GPIO22 / pin 15 ---> Play / pause button ---> GND
 ```
 
 Both are active LOW.
@@ -307,8 +338,8 @@ Both are active LOW.
 Software should convert these into logical events such as:
 
 ```text
-VOLUME_UP
-VOLUME_DOWN
+STOP
+PLAY_PAUSE
 ```
 
 The state machine should not need to know the underlying GPIO numbers.
@@ -475,8 +506,8 @@ modes/
 For example:
 
 ```text
-GPIO27 falling edge ---> VOLUME_UP
-GPIO22 falling edge ---> VOLUME_DOWN
+GPIO27 falling edge ---> STOP
+GPIO22 falling edge ---> PLAY_PAUSE
 GPIO23 falling edge ---> NAV_LEFT
 GPIO24 falling edge ---> NAV_RIGHT
 GPIO5 falling edge  ---> ARCADE_1
@@ -540,8 +571,8 @@ PIN_ENCODER_A = 4
 PIN_ENCODER_B = 17
 PIN_ENCODER_BUTTON = 16
 
-PIN_VOLUME_UP = 27
-PIN_VOLUME_DOWN = 22
+PIN_STOP = 27
+PIN_PLAY_PAUSE = 22
 
 PIN_NAV_LEFT = 23
 PIN_NAV_RIGHT = 24

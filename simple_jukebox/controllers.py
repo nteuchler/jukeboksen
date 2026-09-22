@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -139,6 +140,20 @@ class BluetoothSpeaker:
 class SystemVolume:
     """Control the volume of PulseAudio's current default output."""
 
+    def is_muted(self) -> bool:
+        result = subprocess.run(
+            ["pactl", "get-sink-mute", "@DEFAULT_SINK@"],
+            capture_output=True, text=True, timeout=2, check=True,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+        return result.stdout.strip() == "Mute: yes"
+
+    def toggle_mute(self) -> None:
+        subprocess.run(
+            ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
+            capture_output=True, text=True, timeout=2, check=True,
+        )
+
     def get(self) -> int:
         result = subprocess.run(
             ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
@@ -167,7 +182,7 @@ class SystemVolume:
 class RgbController:
     """Own the one active RGB effect thread."""
 
-    MODES = {"off", "flame", "party", "equalizer"}
+    MODES = {"off", "flame", "party", "equalizer", "red", "green"}
 
     def __init__(self) -> None:
         self.mode = "off"
@@ -226,6 +241,8 @@ class RgbController:
                 "flame": self._rgb_module.run_flame,
                 "party": self._rgb_module.run_party,
                 "equalizer": self._rgb_module.run_equalizer,
+                "red": self._rgb_module.run_red,
+                "green": self._rgb_module.run_green,
             }
             runners[mode](stop_event=stop_event)
         except Exception as error:
