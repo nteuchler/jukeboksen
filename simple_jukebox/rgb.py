@@ -274,6 +274,26 @@ def run_equalizer(stop_event: threading.Event) -> None:
         stop_event.wait(FRAME_DELAY)
 
 
+def render_countdown(fraction: float) -> None:
+    """Mirror shrinking bars from the outer ends, fading the fractional LED."""
+    fraction = max(0.0, min(1.0, fraction))
+    strip = _get_strip()
+    height = EQUALIZER_SIDE_LENGTH * fraction
+    red = min(255, round(510 * (1 - fraction)))
+    green = min(255, round(510 * fraction))
+    for pixel in range(LED_COUNT):
+        offset = min(pixel, LED_COUNT - 1 - pixel)
+        brightness = max(0.0, min(1.0, height - offset)) if offset < EQUALIZER_SIDE_LENGTH else 0
+        strip.setPixelColor(pixel, Color(round(red * brightness), round(green * brightness), 0))
+    strip.show()
+
+
+def run_countdown(stop_event: threading.Event, get_fraction) -> None:
+    while not stop_event.is_set():
+        render_countdown(get_fraction())
+        stop_event.wait(.1)
+
+
 def clear_strip() -> None:
     strip = _get_strip()
     for pixel in range(LED_COUNT):

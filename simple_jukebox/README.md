@@ -25,7 +25,7 @@ listens to the common speaker-output monitor, so it reacts to local files and
 Bluetooth playback.
 
 The left/right navigation buttons (BCM23/BCM24) select the previous/next mode:
-NFC reader → Idle → Local files → Bluetooth speaker → Music quiz, wrapping at
+NFC reader → Idle → Local files → Bluetooth speaker → Music quiz → Coin survival, wrapping at
 either end. Each debounced press moves once; holding does not repeat. Use
 **Disable/Enable navigation buttons** in the website's Mode section to lock or
 unlock these physical controls. Website mode selection stays available. Navigation
@@ -104,3 +104,36 @@ Remote pause and automatic re-arming require the phone/player to expose BlueZ
 manual pause then resume works when status is available. Leaving quiz mode
 stops the buzzer and Bluetooth speaker and restores the previous RGB effect.
 The buzzer respects the shared output volume and mute setting.
+
+### Coin survival
+
+Select **Coin survival** to start a 30-minute countdown. The website's Coin
+survival section accepts **1–180 whole minutes**; applying a new duration while
+running restarts the countdown. The selected duration is kept across mode
+changes for this app session; restarting the app restores the 30-minute default.
+
+Each debounced coin input on **BCM12** resets the timer to the full selected
+duration, stops the current warning/alarm, and refills the LEDs. A held contact
+counts once. Coins outside this mode still count in the input log but do not
+start a countdown.
+
+Offline spoken warnings play at 10, 5, and 1 minute, then 30 and 10 seconds
+remaining (only thresholds below the starting duration). At zero, a synthesized
+alarm, descending dying sound, and revival prompt repeat every 15 seconds until
+a coin arrives or you leave the mode. Audio uses the normal speaker volume and
+mute settings. Install its system dependencies on a replacement Pi:
+
+```bash
+sudo apt install espeak-ng pulseaudio-utils
+```
+
+Both LED sides shrink symmetrically from 45 LEDs per side to zero, with a fading
+edge and green-to-yellow-to-red color progression. The middle LEDs stay dark.
+The website and OLED also show remaining time. This mode owns the LED strip;
+leaving it cancels the sounds/countdown and restores the previous RGB effect.
+It does not enable Bluetooth or local music playback.
+
+The command worker advances the monotonic timer without an open browser.
+`POST /api/survival` with `{"minutes":30}` sets the duration; `/api/status`
+includes `survival` with duration, remaining seconds, fraction, expiry, and audio
+errors. GPIO coin events are submitted through the command queue.

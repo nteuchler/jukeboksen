@@ -11,6 +11,12 @@ LOGGER = logging.getLogger(__name__)
 
 def status_lines(status):
     mode = status.get("mode", "idle")
+    if mode == "coin_survival":
+        survival = status.get("survival") or {}
+        remaining = survival.get("remaining_seconds", 0)
+        return ["Coin survival", f"{remaining // 60:02d}:{remaining % 60:02d} remaining",
+                "Time is up!" if survival.get("expired") else "Insert coin to refill",
+                str(survival.get("error") or status.get("message", ""))]
     if mode == "music_quiz":
         quiz = status.get("quiz") or {}
         winner = quiz.get("winner")

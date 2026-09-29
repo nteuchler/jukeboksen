@@ -23,6 +23,8 @@ class CommandType(str, Enum):
     ADJUST_VOLUME = "adjust_volume"
     TOGGLE_OUTPUT_MUTE = "toggle_output_mute"
     ARCADE_PRESS = "arcade_press"
+    COIN_INSERTED = "coin_inserted"
+    CONFIGURE_SURVIVAL = "configure_survival"
     SET_RGB = "set_rgb"
     SHUTDOWN = "shutdown"
 
@@ -100,6 +102,7 @@ class CommandEngine:
                     break
             if self._queue.empty():
                 self.machine.poll_quiz()
+                self.machine.poll_survival()
                 await asyncio.sleep(0.01)
                 continue
             queued = self._queue.get_nowait()
@@ -112,6 +115,7 @@ class CommandEngine:
                 queued.result.set_result(value)
             finally:
                 self._queue.task_done()
+            self.machine.poll_survival()
 
     def _handle(self, command: Command) -> Any:
         if command.type is CommandType.CHANGE_MODE:
@@ -130,6 +134,10 @@ class CommandEngine:
             return self.services.volume.toggle_mute()
         if command.type is CommandType.ARCADE_PRESS:
             return self.machine.arcade_press(command.value)
+        if command.type is CommandType.COIN_INSERTED:
+            return self.machine.coin_inserted()
+        if command.type is CommandType.CONFIGURE_SURVIVAL:
+            return self.machine.configure_survival(command.value)
         if command.type is CommandType.ADJUST_VOLUME:
             return self.services.volume.set(
                 max(0, min(100, self.services.volume.get() + command.value))
@@ -137,6 +145,8 @@ class CommandEngine:
         if command.type is CommandType.SET_RGB:
             if self.machine.mode.value == "music_quiz":
                 raise RuntimeError("Music quiz controls the RGB lights; leave quiz mode to change effects")
+            if self.machine.mode.value == "coin_survival":
+                raise RuntimeError("Coin survival controls the RGB lights; leave survival mode to change effects")
             return self.services.rgb.set_mode(command.value)
         if command.type is CommandType.SHUTDOWN:
             self.machine.close()

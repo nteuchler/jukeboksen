@@ -74,8 +74,8 @@ def test_navigation_wiring_wraparound_and_website_disable(monkeypatch):
     service._candidate_since['NAV_RIGHT'] = 0
     try:
         assert b'id="navigation-toggle"' in client.get('/').data
-        for direction, expected in [(1, ['local_files', 'bluetooth', 'music_quiz', 'nfc', 'idle']),
-                                    (-1, ['nfc', 'music_quiz', 'bluetooth', 'local_files', 'idle'])]:
+        for direction, expected in [(1, ['local_files', 'bluetooth', 'music_quiz', 'coin_survival', 'nfc', 'idle']),
+                                    (-1, ['nfc', 'coin_survival', 'music_quiz', 'bluetooth', 'local_files', 'idle'])]:
             futures = [engine.enqueue(Command(CommandType.NAVIGATE_MODE, direction)) for _ in expected]
             for future in futures:
                 future.result(timeout=2)

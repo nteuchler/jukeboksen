@@ -39,6 +39,10 @@ class FakeRgb:
     def close(self):
         self.mode = "off"
 
+    def set_countdown(self, fraction):
+        self.mode = 'countdown'
+        self.fraction = fraction
+
 
 def make_app():
     return create_app(

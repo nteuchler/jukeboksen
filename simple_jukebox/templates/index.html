@@ -18,6 +18,11 @@
     #power-warning { background: #fff0c2; color: #664500; border: 2px solid #b87900; padding: 1rem; border-radius: 10px; }
     #power-warning[data-active="true"] { background: #ffe0dc; color: #851b12; border-color: #b52b20; }
     #coin-count { font-size: 2.5rem; color: #176b55; }
+    #survival-time { font-size: 2.5rem; font-variant-numeric: tabular-nums; }
+    .survival-bars { display: flex; gap: 1rem; margin: 1rem 0; }
+    .survival-bars > div { flex: 1; height: 1rem; background: #252525; border-radius: 4px; overflow: hidden; }
+    .survival-bars > div:last-child { transform: scaleX(-1); }
+    .survival-fill { display: block; height: 100%; transition: width 1s linear; }
   </style>
 </head>
 <body>
@@ -35,9 +40,23 @@
     <button class="mode" data-mode="local_files">Local files</button>
     <button class="mode" data-mode="bluetooth">Bluetooth speaker</button>
     <button class="mode" data-mode="music_quiz">Music quiz</button>
+    <button class="mode" data-mode="coin_survival">Coin survival</button>
     <p id="navigation-status" aria-live="polite">Loading navigation controls…</p>
     <button id="navigation-toggle" role="switch" aria-checked="true" disabled>Disable navigation buttons</button>
     <p id="quiz-status" hidden aria-live="polite"></p>
+  </section>
+  <section>
+    <h2>Coin survival</h2>
+    <output id="survival-time" aria-label="Survival time remaining">30:00</output>
+    <div class="survival-bars" aria-hidden="true"><div><span class="survival-fill"></span></div><div><span class="survival-fill"></span></div></div>
+    <p id="survival-status" role="status"></p>
+    <form id="survival-settings">
+      <label for="survival-minutes">Time per coin (minutes)</label>
+      <input id="survival-minutes" type="number" min="1" max="180" step="1" value="30" required>
+      <button id="survival-apply" type="submit">Save duration</button>
+    </form>
+    <p>Each coin refills the timer. Warnings play as time runs out; the alarm repeats until you insert a coin or leave this mode. Changing the duration restarts an active countdown.</p>
+    <p id="survival-error" role="alert"></p>
   </section>
   <section>
     <h2>Local music</h2>
@@ -78,6 +97,7 @@
     <div id="inputs-log" style="max-height:220px; overflow:auto; font-family: monospace; background:#f7f7f7; padding:.5rem; border-radius:6px;">Loading…</div>
   </section>
   <script>
+    let survivalSettingsDirty = false;
     async function api(url, body) {
       const response = await fetch(url, {method: body ? 'POST' : 'GET', headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
       const data = await response.json();
@@ -103,8 +123,22 @@
       quiz.hidden = status.mode !== 'music_quiz';
       quiz.textContent = status.quiz?.error || (status.quiz?.winner
         ? `Player ${status.quiz.winner} wins the buzz! Resume on your phone for the next round.`
-        : 'Connect your phone to Jukeboks and play music. Arcade 1 = red; Arcade 2 = green. First press wins.');
-      document.querySelectorAll('.rgb').forEach(button => button.disabled = status.mode === 'music_quiz');
+        : 'Connect your phone to Jukeboks and play music. Arcade 1 = Player 2 / green; Arcade 2 = Player 1 / red. First press wins.');
+      document.querySelectorAll('.rgb').forEach(button => button.disabled = ['music_quiz', 'coin_survival'].includes(status.mode));
+      const survival = status.survival || {};
+      const seconds = survival.active ? survival.remaining_seconds : (survival.minutes || 30) * 60;
+      document.querySelector('#survival-time').textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      document.querySelector('#survival-status').textContent = !survival.active
+        ? 'Select Coin survival mode to start.'
+        : survival.expired ? 'Time is up! Insert a coin to revive me.' : 'Insert a coin to refill the countdown.';
+      document.querySelector('#survival-error').textContent = survival.error || '';
+      document.querySelector('#survival-apply').textContent = survival.active ? 'Apply and restart timer' : 'Save duration';
+      if (!survivalSettingsDirty) document.querySelector('#survival-minutes').value = survival.minutes || 30;
+      const fraction = survival.active ? survival.fraction : 1;
+      document.querySelectorAll('.survival-fill').forEach(bar => {
+        bar.style.width = `${fraction * 100}%`;
+        bar.style.backgroundColor = `hsl(${120 * fraction}, 80%, 40%)`;
+      });
       document.querySelector('#details').textContent = status.playing ? `Playing: ${status.track}${status.output_muted ? ' (muted)' : ''}` : status.bluetooth_active ? 'Bluetooth active' : 'Not playing';
       document.querySelectorAll('.mode').forEach(button => button.classList.toggle('active', button.dataset.mode === status.mode));
       const volume = document.querySelector('#volume');
@@ -169,6 +203,16 @@
       }
     }
     document.querySelectorAll('.mode').forEach(button => button.onclick = () => act('/api/mode', {mode: button.dataset.mode}));
+    document.querySelector('#survival-minutes').oninput = () => { survivalSettingsDirty = true; };
+    document.querySelector('#survival-settings').onsubmit = async event => {
+      event.preventDefault();
+      document.querySelector('#error').textContent = '';
+      try {
+        await api('/api/survival', {minutes: Number(document.querySelector('#survival-minutes').value)});
+        survivalSettingsDirty = false;
+        await refresh();
+      } catch (error) { document.querySelector('#error').textContent = error.message; }
+    };
     document.querySelector('#play').onclick = () => act('/api/play', {track: document.querySelector('#tracks').value});
     document.querySelector('#stop').onclick = () => act('/api/stop', {});
     document.querySelector('#mute').onclick = () => act('/api/mute', {});

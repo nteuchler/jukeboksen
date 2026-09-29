@@ -15,11 +15,12 @@ from simple_jukebox.nfc import NfcReader
 from simple_jukebox.quiz import BluetoothMedia, QuizBuzzer
 from simple_jukebox.power import power_status
 from simple_jukebox.state_machine import StateMachine
+from simple_jukebox.survival_audio import SurvivalAudio
 
 
 def create_app(
     *, player=None, bluetooth=None, volume=None, rgb=None, nfc=None,
-    quiz_media=None, buzzer=None,
+    quiz_media=None, buzzer=None, survival_audio=None,
     media_folder: Path | None = None,
 ) -> Flask:
     app_folder = Path(__file__).resolve().parent
@@ -31,7 +32,8 @@ def create_app(
     services = JukeboxServices(player, bluetooth, volume, rgb,
                                nfc if nfc is not None else NfcReader(),
                                quiz_media if quiz_media is not None else BluetoothMedia(),
-                               buzzer if buzzer is not None else QuizBuzzer())
+                               buzzer if buzzer is not None else QuizBuzzer(),
+                               survival_audio if survival_audio is not None else SurvivalAudio())
     machine = StateMachine(services)
     engine = CommandEngine(machine, services)
     oled = OledService(machine.status)
@@ -53,6 +55,7 @@ def create_app(
         on_encoder_press=lambda: input_command(Command(CommandType.TOGGLE_OUTPUT_MUTE)),
         on_arcade_press=lambda button: input_command(Command(CommandType.ARCADE_PRESS, 3 - button)),
         on_navigation=lambda direction: input_command(Command(CommandType.NAVIGATE_MODE, direction)),
+        on_coin=lambda: input_command(Command(CommandType.COIN_INSERTED)),
     )
     input_service.start()
 
@@ -93,6 +96,13 @@ def create_app(
     def mode():
         data = request.get_json(silent=True) or {}
         return run_command(Command(CommandType.CHANGE_MODE, data.get("mode", "")))
+
+    @app.post("/api/survival")
+    def configure_survival():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"ok": False, "error": "Provide a duration in minutes"}), 400
+        return run_command(Command(CommandType.CONFIGURE_SURVIVAL, data.get("minutes")))
 
     @app.post("/api/play")
     def play():

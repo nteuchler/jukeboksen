@@ -48,6 +48,8 @@ class RgbService(Protocol):
 
     def set_mode(self, mode: str) -> None: ...
 
+    def set_countdown(self, fraction: float) -> None: ...
+
     def close(self) -> None: ...
 
 
@@ -70,6 +72,7 @@ class JukeboxServices:
     nfc: NfcService | None = None
     quiz_media: QuizMediaService | None = None
     buzzer: BuzzerService | None = None
+    survival_audio: SurvivalAudioService | None = None
 
 
 class QuizMediaService(Protocol):
@@ -80,4 +83,10 @@ class QuizMediaService(Protocol):
 
 class BuzzerService(Protocol):
     def play(self) -> None: ...
+    def stop(self) -> None: ...
+
+
+class SurvivalAudioService(Protocol):
+    error: str | None
+    def play(self, cue: str) -> None: ...
     def stop(self) -> None: ...

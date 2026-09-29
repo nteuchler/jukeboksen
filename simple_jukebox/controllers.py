@@ -184,7 +184,7 @@ class SystemVolume:
 class RgbController:
     """Own the one active RGB effect thread."""
 
-    MODES = {"off", "flame", "party", "equalizer", "red", "green"}
+    MODES = {"off", "flame", "party", "equalizer", "red", "green", "countdown"}
 
     def __init__(self) -> None:
         self.mode = "off"
@@ -193,6 +193,13 @@ class RgbController:
         self._thread: threading.Thread | None = None
         self._lock = threading.RLock()
         self._rgb_module = None
+        self._countdown_fraction = 1.0
+
+    def set_countdown(self, fraction: float) -> None:
+        with self._lock:
+            self._countdown_fraction = max(0.0, min(1.0, fraction))
+            if self.mode != "countdown":
+                self.set_mode("countdown")
 
     def set_mode(self, mode: str) -> None:
         if mode not in self.MODES:
@@ -239,6 +246,9 @@ class RgbController:
                 from simple_jukebox import rgb
 
                 self._rgb_module = rgb
+            if mode == "countdown":
+                self._rgb_module.run_countdown(stop_event, lambda: self._countdown_fraction)
+                return
             runners = {
                 "flame": self._rgb_module.run_flame,
                 "party": self._rgb_module.run_party,

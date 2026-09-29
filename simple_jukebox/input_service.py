@@ -44,12 +44,14 @@ class InputService:
         on_encoder_press: Callable[[], None] | None = None,
         on_arcade_press: Callable[[int], None] | None = None,
         on_navigation: Callable[[int], None] | None = None,
+        on_coin: Callable[[], None] | None = None,
     ) -> None:
         self._max_events = max_events
         self._on_encoder_step = on_encoder_step
         self._on_encoder_press = on_encoder_press
         self._on_arcade_press = on_arcade_press
         self._on_navigation = on_navigation
+        self._on_coin = on_coin
         self._navigation_disabled = False
         self._encoder_previous: int | None = None
         self._encoder_steps = 0
@@ -187,6 +189,11 @@ class InputService:
                             self._events.append((time.time(), name))
                             if name == "COIN":
                                 self._coin_count += 1
+                                if self._on_coin is not None:
+                                    try:
+                                        self._on_coin()
+                                    except Exception:
+                                        LOGGER.exception("Coin command failed")
                             if name in {"NAV_LEFT", "NAV_RIGHT"} and not self._navigation_disabled and self._on_navigation is not None:
                                 try:
                                     self._on_navigation(-1 if name == "NAV_LEFT" else 1)

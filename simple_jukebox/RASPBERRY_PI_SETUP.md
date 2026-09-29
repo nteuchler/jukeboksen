@@ -42,7 +42,7 @@ sudo apt update
 sudo apt install git curl build-essential pkg-config swig \
   python3 python3-venv python3-dev liblgpio-dev python3-rpi-lgpio \
   bluez bluez-tools pulseaudio pulseaudio-utils pulseaudio-module-bluetooth \
-  vlc alsa-utils i2c-tools gpiod raspi-config raspi-utils
+  vlc espeak-ng alsa-utils i2c-tools gpiod raspi-config raspi-utils
 sudo usermod -aG audio,video,render,spi,i2c,gpio,input jukeboks
 sudo systemctl enable --now bluetooth.service
 sudo loginctl enable-linger jukeboks
@@ -60,6 +60,7 @@ package changes; the goal is to use one audio server.
 | `bluez` | 5.82-1.1+rpt2 | Bluetooth daemon, `bluetoothctl`, `mpris-proxy` |
 | `pulseaudio`, `pulseaudio-utils`, `pulseaudio-module-bluetooth` | 17.0+dfsg1-2+rpt1 | Speaker routing, phone audio, `pactl`, `parec`, `paplay` |
 | `vlc` | 1:3.0.23-0+deb13u1+rpt2 | `cvlc` local music playback |
+| `espeak-ng` | 1.52.0+dfsg-5 | Offline Coin survival spoken warnings |
 | `alsa-utils` | 1.2.14-1+rpt1 | Audio device diagnostics |
 | `python3`, `python3-dev`, `python3-venv` | 3.13.5-1 | App environment and extension builds |
 | `python3-rpi-lgpio` | 0.6-0~rpt1+trixie | System GPIO compatibility library |
@@ -70,7 +71,7 @@ package changes; the goal is to use one audio server.
 | `git` | 1:2.47.3-0+deb13u1 | Source checkout |
 
 The current machine also has developer/experimental packages such as `gh`,
-Node.js, `mpv`, `espeak-ng`, PulseAudio debug/equalizer/JACK modules, and desktop
+Node.js, `mpv`, PulseAudio debug/equalizer/JACK modules, and desktop
 tools. These are not dependencies of the current jukebox app. System
 `python3-smbus2` and `python3-spidev` are installed too, but the isolated app
 environment installs its own Python dependencies.
@@ -307,6 +308,9 @@ Acceptance checklist:
 - Navigation buttons cycle modes; website navigation disable/re-enable works.
 - Music quiz: ARCADE_1 is Player 2/green, ARCADE_2 is Player 1/red; the first
   press wins, pauses supported phone playback, and sounds the buzzer.
+- Coin survival: try a one-minute duration, verify speech at 30/10 seconds,
+  alarm and dying sounds at expiry, shrinking LED bars, and coin-triggered refill.
+  Restore 30 minutes after testing.
 - OLED displays the current mode. NFC reader reports a UID in NFC mode.
 - RGB effects work on GPIO10, including red/green colors and the audio equalizer.
 - No current low-voltage warning: `vcgencmd get_throttled` ideally shows `0x0`.
@@ -330,8 +334,7 @@ Run the tests **with the app stopped** (some tests initialize hardware adapters)
 simple_jukebox/.venv/bin/python -m pytest -q simple_jukebox/tests
 ```
 
-The application suite last passed 55 tests before this documentation was added.
-It does not replace the physical acceptance checks above.
+The test suite does not replace the physical acceptance checks above.
 
 ## 8. Optional: start the app at boot
 
