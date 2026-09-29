@@ -10,6 +10,8 @@ import importlib
 import json
 import random
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unicodedata
@@ -34,11 +36,11 @@ def parse_args() -> argparse.Namespace:
         "output", nargs="?", type=Path, default=Path("output"),
         help="Importer output folder containing index.json (default: output)",
     )
-    parser.add_argument("--mode", choices=("random", "best"), default="random")
-    parser.add_argument("--gap-ms", type=int, default=120)
-    parser.add_argument("--missing-gap-ms", type=int, default=180)
-    parser.add_argument("--min-score", type=float, default=0.45)
-    parser.add_argument("--target-dbfs", type=float, default=-18.0)
+    parser.add_argument("--mode", choices=("random", "best"), default="best")
+    parser.add_argument("--gap-ms", type=int, default=180)
+    parser.add_argument("--missing-gap-ms", type=int, default=220)
+    parser.add_argument("--min-score", type=float, default=0.55)
+    parser.add_argument("--target-dbfs", type=float, default=-12.0)
     parser.add_argument("--no-normalize", action="store_true")
     parser.add_argument("--strict", action="store_true", help="Refuse sentences with missing words")
     parser.add_argument("--save", type=Path, help="Save one sentence instead of interactive mode")
@@ -165,6 +167,48 @@ def normalize_volume(audio: AudioSegmentT, target_dbfs: float) -> AudioSegmentT:
     return audio.apply_gain(max(-12.0, min(12.0, target_dbfs - audio.dBFS)))
 
 
+def synthesize_tts_word(word: str) -> AudioSegmentT | None:
+    candidates: list[list[str]] = []
+    # prefer Danish voices/locale where supported
+    for executable in ("espeak-ng", "espeak"):
+        if shutil.which(executable):
+            # prefer Danish voice, slower speed, and slightly calmer pitch for clearer speech
+            candidates.append([executable, "-v", "da", "-s", "150", "-p", "50", "-w", "", word])
+            candidates.append([executable, "-v", "da+f3", "-s", "150", "-p", "50", "-w", "", word])
+            candidates.append([executable, "-v", "da", "-w", "", word])
+            candidates.append([executable, "-w", "", word])
+    for executable in ("pico2wave",):
+        if shutil.which(executable):
+            candidates.append([executable, "-w", "", word])
+
+    for command in candidates:
+        temp_file: Path | None = None
+        audio: AudioSegmentT | None = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
+                temp_file = Path(handle.name)
+            cmd = list(command)
+            # locate the -w argument position and replace its placeholder with the temp file
+            try:
+                w_index = cmd.index("-w")
+                cmd[w_index + 1] = str(temp_file)
+            except ValueError:
+                # some TTS variants take output file as the next-to-last arg
+                if len(cmd) >= 2:
+                    cmd[-2] = str(temp_file)
+            completed = subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if completed.returncode != 0 or not temp_file.is_file():
+                continue
+            audio = AudioSegment.from_wav(temp_file)
+            return audio
+        except Exception:
+            continue
+        finally:
+            if temp_file is not None:
+                temp_file.unlink(missing_ok=True)
+    return None
+
+
 def build_sentence(words: list[str], library: dict[str, list[dict]], match_index: MatchIndex, mode: str,
                    gap_ms: int, missing_gap_ms: int, normalize: bool,
                    target_dbfs: float, strict: bool) -> tuple[AudioSegmentT | None, list[str], list[dict]]:
@@ -187,22 +231,59 @@ def build_sentence(words: list[str], library: dict[str, list[dict]], match_index
             selections.append(selected)
             pause = gap_ms
         else:
-            pause = missing_gap_ms
+            fallback_audio = synthesize_tts_word(word)
+            if fallback_audio is not None:
+                sentence += normalize_volume(fallback_audio, target_dbfs) if normalize else fallback_audio
+                selections.append({
+                    "input_word": word,
+                    "matched_word": word,
+                    "song": "tts-fallback",
+                    "start": 0.0,
+                    "tts_fallback": True,
+                })
+                pause = gap_ms
+            else:
+                pause = missing_gap_ms
+                if strict:
+                    missing.append(word)
+                    return None, list(dict.fromkeys(missing)), selections
         if position < len(words) - 1 and pause:
             sentence += AudioSegment.silent(duration=pause)
     return sentence if len(sentence) else None, missing, selections
 
 
 def play_wav(audio: AudioSegmentT) -> None:
-    if sys.platform != "win32":
-        raise RuntimeError("This packaged player uses Windows winsound playback.")
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
             temporary_path = Path(handle.name)
         audio.export(temporary_path, format="wav")
-        import winsound
-        winsound.PlaySound(str(temporary_path), winsound.SND_FILENAME)
+
+        if sys.platform == "win32":
+            import winsound
+            winsound.PlaySound(str(temporary_path), winsound.SND_FILENAME)
+            return
+
+        ffplay = shutil.which("ffplay")
+        if ffplay:
+            subprocess.run([ffplay, "-nodisp", "-autoexit", str(temporary_path)], check=False)
+            return
+
+        aplay = shutil.which("aplay")
+        if aplay:
+            subprocess.run([aplay, "-q", str(temporary_path)], check=False)
+            return
+
+        try:
+            import simpleaudio as sa
+            wave_obj = sa.WaveObject(str(temporary_path))
+            play_obj = wave_obj.play()
+            play_obj.wait_done()
+            return
+        except Exception as exc:
+            raise RuntimeError(
+                "No supported audio player found. Install ffmpeg/ffplay, aplay, or simpleaudio."
+            ) from exc
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)
