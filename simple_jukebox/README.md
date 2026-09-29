@@ -3,6 +3,8 @@
 This is separate from `firsttests`. It has one state machine, two hardware wrappers,
 one Flask file, and one web page.
 
+For a replacement Pi, follow [Raspberry Pi setup and rebuild guide](RASPBERRY_PI_SETUP.md).
+
 ## Run
 
 From the repository root:
