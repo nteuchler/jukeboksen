@@ -113,7 +113,9 @@ running restarts the countdown. The selected duration is kept across mode
 changes for this app session; restarting the app restores the 30-minute default.
 
 Each debounced coin input on **BCM12** resets the timer to the full selected
-duration, stops the current warning/alarm, and refills the LEDs. A held contact
+duration, stops the current warning/alarm, refills the LEDs, and plays a short
+ghost moan. The 1.73-second clip is bundled for offline playback; see
+[sound credits](assets/README.md). A held contact
 counts once. Coins outside this mode still count in the input log but do not
 start a countdown.
 

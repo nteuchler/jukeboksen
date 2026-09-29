@@ -10,6 +10,8 @@ import wave
 from pathlib import Path
 
 
+COIN_SOUND = Path(__file__).with_name('assets') / 'coin_moan.wav'
+
 WARNINGS = {
     '600': '10 minutes remaining. Insert a coin to survive.',
     '300': '5 minutes remaining. Insert a coin to survive.',
@@ -44,7 +46,7 @@ class SurvivalAudio:
         self._cancel = threading.Event()
 
     def play(self, cue):
-        if cue != 'expired' and cue not in WARNINGS:
+        if cue not in {'expired', 'coin'} and cue not in WARNINGS:
             raise ValueError('Unknown survival sound')
         self.stop()
         self.error = None
@@ -84,6 +86,9 @@ class SurvivalAudio:
 
     def _play(self, cue, cancel):
         try:
+            if cue == 'coin':
+                self._run(['paplay', str(COIN_SOUND)], cancel)
+                return
             with tempfile.TemporaryDirectory(prefix='jukebox-survival-') as directory:
                 path = Path(directory) / 'cue.wav'
                 if cue == 'expired':

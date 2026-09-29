@@ -54,6 +54,7 @@ def test_countdown_warnings_expiry_repeat_and_coin_revival():
     assert sounds.cues[-2:] == ['expired', 'expired']
     timer.coin()
     assert sounds.stops == 2
+    assert sounds.cues[-1] == 'coin'
     assert timer.status()['remaining_seconds'] == 1800
     assert not timer.status()['expired']
     assert rgb.fraction == 1
@@ -81,7 +82,7 @@ def test_coin_resets_remaining_time_and_duration_change_restarts():
     assert timer.status()['remaining_seconds'] == 60
     now[0] += 55
     timer.poll()
-    assert sounds.cues == ['10']  # skip obsolete warnings after a delayed tick
+    assert sounds.cues == ['coin', '10']  # skip obsolete warnings after a delayed tick
 
 
 @pytest.mark.parametrize('value', [None, True, False, 0, -1, 181, 1.5, '30', [], {}])
@@ -104,7 +105,7 @@ def test_audio_failure_does_not_prevent_expiry_or_coin_reset():
     assert timer.status()['expired']
     assert timer.status()['error'] == 'speaker unavailable'
     timer.coin()
-    assert timer.status()['error'] is None
+    assert timer.status()['error'] == 'speaker unavailable'
     assert timer.status()['remaining_seconds'] == 1800
 
 
@@ -162,10 +163,12 @@ def test_web_configuration_coin_gpio_and_background_expiry(monkeypatch):
         engine.submit(Command(CommandType.SET_VOLUME, 40))
         assert machine.survival.status()['remaining_seconds'] == 60
         assert service.status()['coin_count'] == 1
+        assert sounds.cues == ['expired', 'coin']
         now[0] += 10
         service._poll_once(2)  # held coin contact must not keep refilling
         engine.submit(Command(CommandType.SET_VOLUME, 40))
         assert machine.survival.status()['remaining_seconds'] == 50
+        assert sounds.cues == ['expired', 'coin']
         assert client.post('/api/survival', json={'minutes': 2}).json['status']['survival']['remaining_seconds'] == 120
         client.post('/api/mode', json={'mode': 'idle'})
         assert rgb.mode == 'party'
@@ -256,4 +259,19 @@ def test_missing_speech_tool_is_reported_without_crashing(monkeypatch):
     audio.play('600')
     audio._thread.join(timeout=1)
     assert audio.error == 'espeak-ng missing'
+    audio.stop()
+
+
+def test_coin_plays_short_bundled_clip_without_speech(monkeypatch):
+    from simple_jukebox.survival_audio import COIN_SOUND
+    with wave.open(str(COIN_SOUND)) as source:
+        assert 0 < source.getnframes() / source.getframerate() < 3
+        assert any(source.readframes(source.getnframes()))
+    commands = []
+    audio = SurvivalAudio()
+    monkeypatch.setattr(audio, '_run', lambda command, cancel: commands.append(command) or True)
+    audio.play('coin')
+    audio._thread.join(timeout=1)
+    assert commands == [['paplay', str(COIN_SOUND)]]
+    assert audio.error is None
     audio.stop()

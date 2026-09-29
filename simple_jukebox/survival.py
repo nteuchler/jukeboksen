@@ -45,6 +45,10 @@ class SurvivalTimer:
     def coin(self):
         if self.deadline is not None:
             self.start()
+            try:
+                self.sounds.play('coin')
+            except Exception as error:
+                self.error = str(error)
 
     def poll(self):
         if self.deadline is None:
