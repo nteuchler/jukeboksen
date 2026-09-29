@@ -15,6 +15,7 @@ from simple_jukebox.services import JukeboxServices
 
 class CommandType(str, Enum):
     CHANGE_MODE = "change_mode"
+    NAVIGATE_MODE = "navigate_mode"
     PLAY = "play"
     STOP = "stop"
     TOGGLE_MUTE = "toggle_mute"
@@ -115,6 +116,8 @@ class CommandEngine:
     def _handle(self, command: Command) -> Any:
         if command.type is CommandType.CHANGE_MODE:
             return self.machine.change_mode(command.value)
+        if command.type is CommandType.NAVIGATE_MODE:
+            return self.machine.navigate_mode(command.value)
         if command.type is CommandType.PLAY:
             return self.machine.play(command.value)
         if command.type is CommandType.STOP:

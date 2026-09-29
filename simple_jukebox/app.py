@@ -36,22 +36,23 @@ def create_app(
     engine = CommandEngine(machine, services)
     oled = OledService(machine.status)
     oled.start()
-    def encoder_command(command):
+    def input_command(command):
         future = engine.enqueue(command)
 
         def report_error(result):
             error = result.exception()
             if error is not None:
-                app.logger.error("Encoder audio command failed: %s", error)
+                app.logger.error("Hardware input command failed: %s", error)
 
         future.add_done_callback(report_error)
 
     input_service = InputService(
-        on_encoder_step=lambda direction: encoder_command(
+        on_encoder_step=lambda direction: input_command(
             Command(CommandType.ADJUST_VOLUME, direction * 5)
         ),
-        on_encoder_press=lambda: encoder_command(Command(CommandType.TOGGLE_OUTPUT_MUTE)),
-        on_arcade_press=lambda button: encoder_command(Command(CommandType.ARCADE_PRESS, 3 - button)),
+        on_encoder_press=lambda: input_command(Command(CommandType.TOGGLE_OUTPUT_MUTE)),
+        on_arcade_press=lambda button: input_command(Command(CommandType.ARCADE_PRESS, 3 - button)),
+        on_navigation=lambda direction: input_command(Command(CommandType.NAVIGATE_MODE, direction)),
     )
     input_service.start()
 
@@ -130,6 +131,15 @@ def create_app(
             return jsonify({"ok": False, "error": "enabled must be a boolean"}), 400
         service = app.config["input_service"]
         service.set_encoder_button_enabled(data["enabled"])
+        return jsonify({"ok": True, "status": service.status()})
+
+    @app.post("/api/inputs/navigation")
+    def set_navigation_enabled():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get("enabled"), bool):
+            return jsonify({"ok": False, "error": "enabled must be a boolean"}), 400
+        service = app.config["input_service"]
+        service.set_navigation_enabled(data["enabled"])
         return jsonify({"ok": True, "status": service.status()})
 
     @app.get("/api/inputs/log")

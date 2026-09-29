@@ -30,6 +30,13 @@ class StateMachine:
         self._quiz_buzz_at = 0.0
         self._previous_rgb = "off"
 
+    def navigate_mode(self, direction: int) -> None:
+        if isinstance(direction, bool) or direction not in (-1, 1):
+            raise ValueError("Navigation direction must be -1 or 1")
+        modes = (Mode.NFC, Mode.IDLE, Mode.LOCAL_FILES, Mode.BLUETOOTH, Mode.MUSIC_QUIZ)
+        with self._lock:
+            self.change_mode(modes[(modes.index(self.mode) + direction) % len(modes)].value)
+
     def change_mode(self, new_mode: str) -> None:
         try:
             target = Mode(new_mode)

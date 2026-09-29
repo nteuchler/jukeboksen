@@ -43,11 +43,14 @@ class InputService:
         on_encoder_step: Callable[[int], None] | None = None,
         on_encoder_press: Callable[[], None] | None = None,
         on_arcade_press: Callable[[int], None] | None = None,
+        on_navigation: Callable[[int], None] | None = None,
     ) -> None:
         self._max_events = max_events
         self._on_encoder_step = on_encoder_step
         self._on_encoder_press = on_encoder_press
         self._on_arcade_press = on_arcade_press
+        self._on_navigation = on_navigation
+        self._navigation_disabled = False
         self._encoder_previous: int | None = None
         self._encoder_steps = 0
         self._encoder_press_since: float | None = None
@@ -184,6 +187,11 @@ class InputService:
                             self._events.append((time.time(), name))
                             if name == "COIN":
                                 self._coin_count += 1
+                            if name in {"NAV_LEFT", "NAV_RIGHT"} and not self._navigation_disabled and self._on_navigation is not None:
+                                try:
+                                    self._on_navigation(-1 if name == "NAV_LEFT" else 1)
+                                except Exception:
+                                    LOGGER.exception("Navigation command failed")
                             if name in {"ARCADE_1", "ARCADE_2"} and self._on_arcade_press is not None:
                                 try:
                                     self._on_arcade_press(int(name[-1]))
@@ -212,6 +220,13 @@ class InputService:
             self._armed["ENCODER_PRESS"] = not held
             self._encoder_press_since = time.monotonic() if held else None
             self._candidate_since["ENCODER_PRESS"] = time.monotonic()
+
+    def set_navigation_enabled(self, enabled: bool) -> None:
+        """Require a fresh press after enabling, including during debounce."""
+        with self._lock:
+            self._navigation_disabled = not enabled
+            for name in ("NAV_LEFT", "NAV_RIGHT"):
+                self._armed[name] = not (self._states[name] or self._candidates[name])
 
     def _poll_encoder(self) -> None:
         if not {"ENCODER_A", "ENCODER_B"} <= self._configured_inputs:
@@ -265,6 +280,7 @@ class InputService:
         return {
             "coin_count": coin_count,
             "encoder_button_disabled": self._encoder_button_disabled,
+            "navigation_disabled": self._navigation_disabled,
             "running": self._running,
             "backend": "RPi.GPIO" if self._use_gpio else "mock",
             "configured_inputs": sorted(self._configured_inputs),

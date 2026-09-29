@@ -35,6 +35,8 @@
     <button class="mode" data-mode="local_files">Local files</button>
     <button class="mode" data-mode="bluetooth">Bluetooth speaker</button>
     <button class="mode" data-mode="music_quiz">Music quiz</button>
+    <p id="navigation-status" aria-live="polite">Loading navigation controls…</p>
+    <button id="navigation-toggle" role="switch" aria-checked="true" disabled>Disable navigation buttons</button>
     <p id="quiz-status" hidden aria-live="polite"></p>
   </section>
   <section>
@@ -125,6 +127,13 @@
         const inputs = await api('/api/inputs');
         const states = inputs.states || {};
         const inputStatus = inputs.status || {};
+        document.querySelector('#navigation-status').textContent = inputStatus.navigation_disabled
+          ? 'Physical navigation buttons disabled. Select a mode above.'
+          : 'Left/right buttons cycle through the modes above.';
+        const navigationToggle = document.querySelector('#navigation-toggle');
+        navigationToggle.disabled = typeof inputStatus.navigation_disabled !== 'boolean';
+        navigationToggle.textContent = inputStatus.navigation_disabled ? 'Enable navigation buttons' : 'Disable navigation buttons';
+        navigationToggle.setAttribute('aria-checked', String(!inputStatus.navigation_disabled));
         document.querySelector('#encoder-button-status').textContent = inputStatus.encoder_button_disabled
           ? 'Encoder button disabled. Rotation still controls volume.'
           : 'Encoder button enabled';
@@ -140,6 +149,8 @@
         container.innerHTML = Object.keys(states).map(k => `<span style="display:inline-block;min-width:120px;">${({PLAY_PAUSE: 'Play / pause', STOP: 'Stop'})[k] || k}: <strong>${states[k] ? 'PRESSED' : 'released'}</strong></span>`).join(' ');
       } catch (e) {
         document.querySelector('#inputs-status').textContent = `Input status unavailable: ${e.message}`;
+        document.querySelector('#navigation-toggle').disabled = true;
+        document.querySelector('#navigation-status').textContent = 'Navigation status unavailable';
         document.querySelector('#inputs-states').textContent = 'Unable to read inputs';
       }
     }
@@ -162,6 +173,9 @@
     document.querySelector('#stop').onclick = () => act('/api/stop', {});
     document.querySelector('#mute').onclick = () => act('/api/mute', {});
     document.querySelector('#encoder-button-toggle').onclick = event => act('/api/inputs/encoder', {
+      enabled: event.currentTarget.getAttribute('aria-checked') !== 'true'
+    });
+    document.querySelector('#navigation-toggle').onclick = event => act('/api/inputs/navigation', {
       enabled: event.currentTarget.getAttribute('aria-checked') !== 'true'
     });
     const volume = document.querySelector('#volume');

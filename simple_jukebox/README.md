@@ -22,6 +22,14 @@ The Equalizer
 listens to the common speaker-output monitor, so it reacts to local files and
 Bluetooth playback.
 
+The left/right navigation buttons (BCM23/BCM24) select the previous/next mode:
+NFC reader → Idle → Local files → Bluetooth speaker → Music quiz, wrapping at
+either end. Each debounced press moves once; holding does not repeat. Use
+**Disable/Enable navigation buttons** in the website's Mode section to lock or
+unlock these physical controls. Website mode selection stays available. Navigation
+is enabled when the app starts; after re-enabling, release any held button before
+pressing again.
+
 Rotating the encoder (A on BCM4, B on BCM17) adjusts the output volume by
 5 percentage points per full quadrature cycle, limited to 0–100%.
 The input log shows `ENCODER_RIGHT` / `ENCODER_LEFT` for rotation.
