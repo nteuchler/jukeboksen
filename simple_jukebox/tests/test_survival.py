@@ -263,8 +263,10 @@ def test_missing_speech_tool_is_reported_without_crashing(monkeypatch):
 
 
 def test_coin_plays_short_bundled_clip_without_speech(monkeypatch):
-    from simple_jukebox.survival_audio import COIN_SOUND
-    with wave.open(str(COIN_SOUND)) as source:
+    from simple_jukebox.survival_audio import COIN_SOUND_DIR
+    clip = COIN_SOUND_DIR / 'coin_moan.wav'
+    monkeypatch.setattr('simple_jukebox.survival_audio.random.choice', lambda clips: clips[0])
+    with wave.open(str(clip)) as source:
         assert 0 < source.getnframes() / source.getframerate() < 3
         assert any(source.readframes(source.getnframes()))
     commands = []
@@ -272,6 +274,39 @@ def test_coin_plays_short_bundled_clip_without_speech(monkeypatch):
     monkeypatch.setattr(audio, '_run', lambda command, cancel: commands.append(command) or True)
     audio.play('coin')
     audio._thread.join(timeout=1)
-    assert commands == [['paplay', str(COIN_SOUND)]]
+    assert commands == [['paplay', str(clip)]]
     assert audio.error is None
+    audio.stop()
+
+
+def test_coin_random_selection_rescans_folder_each_time(monkeypatch, tmp_path):
+    monkeypatch.setattr('simple_jukebox.survival_audio.COIN_SOUND_DIR', tmp_path)
+    first = tmp_path / 'coin_moan1.wav'
+    first.touch()
+    (tmp_path / 'unrelated.wav').touch()
+    (tmp_path / 'coin_moan_folder.wav').mkdir()
+    choices, commands = [], []
+    def choose(clips):
+        choices.append(clips)
+        return clips[-1]
+    monkeypatch.setattr('simple_jukebox.survival_audio.random.choice', choose)
+    audio = SurvivalAudio()
+    monkeypatch.setattr(audio, '_run', lambda command, cancel: commands.append(command) or True)
+    audio.play('coin')
+    audio._thread.join(timeout=1)
+    second = tmp_path / 'coin_moan2.wav'
+    second.touch()
+    audio.play('coin')
+    audio._thread.join(timeout=1)
+    assert choices == [[first], [first, second]]
+    assert commands == [['paplay', str(first)], ['paplay', str(second)]]
+    audio.stop()
+
+
+def test_empty_coin_sound_folder_reports_error(monkeypatch, tmp_path):
+    monkeypatch.setattr('simple_jukebox.survival_audio.COIN_SOUND_DIR', tmp_path)
+    audio = SurvivalAudio()
+    audio.play('coin')
+    audio._thread.join(timeout=1)
+    assert 'No coin_moan*.wav sounds found' in audio.error
     audio.stop()

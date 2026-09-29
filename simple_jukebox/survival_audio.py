@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import random
 import struct
 import subprocess
 import tempfile
@@ -10,7 +11,7 @@ import wave
 from pathlib import Path
 
 
-COIN_SOUND = Path(__file__).with_name('assets') / 'coin_moan.wav'
+COIN_SOUND_DIR = Path(__file__).with_name('assets')
 
 WARNINGS = {
     '600': '10 minutes remaining. Insert a coin to survive.',
@@ -87,7 +88,10 @@ class SurvivalAudio:
     def _play(self, cue, cancel):
         try:
             if cue == 'coin':
-                self._run(['paplay', str(COIN_SOUND)], cancel)
+                clips = sorted(path for path in COIN_SOUND_DIR.glob('coin_moan*.wav') if path.is_file())
+                if not clips:
+                    raise FileNotFoundError(f'No coin_moan*.wav sounds found in {COIN_SOUND_DIR}')
+                self._run(['paplay', str(random.choice(clips))], cancel)
                 return
             with tempfile.TemporaryDirectory(prefix='jukebox-survival-') as directory:
                 path = Path(directory) / 'cue.wav'

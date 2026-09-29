@@ -1,5 +1,11 @@
 # Bundled sound credits
 
+Coin survival randomly chooses a `coin_moan*.wav` file from this folder for each
+coin. This includes `coin_moan.wav`, `coin_moan1.wav`, `coin_moan2.wav`, etc.
+Files added or removed are picked up on the next coin without restarting.
+Consecutive repeats are possible. Keep source/license notes for additional clips;
+the credits below apply only to the original `coin_moan.wav`.
+
 ## coin_moan.wav
 
 - Work: **Ghost Monster Voice Moaning & Growling**
