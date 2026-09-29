@@ -88,9 +88,9 @@ class BluetoothSpeaker:
             return
         for line in self.process.stdout:
             if "Device " in line and ("Connected: yes" in line or "Paired: yes" in line):
-                parts = line.split()
-                if len(parts) >= 2:
-                    self._send(f"trust {parts[1]}")
+                match = re.search(r"Device\s+((?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})\b", line)
+                if match:
+                    self._send(f"trust {match.group(1)}")
 
     def start(self) -> None:
         if self.active:
@@ -106,6 +106,8 @@ class BluetoothSpeaker:
         self._reader = threading.Thread(target=self._read_output, daemon=True)
         self._reader.start()
         for command in (
+            # Incoming pairing requests must use this headless agent too.
+            "default-agent",
             "power on",
             f"system-alias {self.name}",
             "pairable on",

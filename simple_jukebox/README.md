@@ -25,6 +25,12 @@ Bluetooth playback.
 Rotating the encoder (A on BCM4, B on BCM17) adjusts the output volume by
 5 percentage points per full quadrature cycle, limited to 0–100%.
 The input log shows `ENCODER_RIGHT` / `ENCODER_LEFT` for rotation.
+The encoder button toggles mute on release. Holding it for 2 seconds disables
+the button, preventing a stuck switch from muting playback. Use the **Enable/Disable
+encoder button** toggle in the website's input section to control it manually.
+Restarting the app also re-enables it. If the switch remains held after enabling,
+it disables again after 2 seconds.
+Rotation still adjusts volume, and input status reports `encoder_button_disabled`.
 
 The I2C OLED automatically shows the current mode, playback/mute or Bluetooth
 readiness, track, and machine message. It refreshes every half second without a
@@ -77,8 +83,8 @@ simple_jukebox/.venv/bin/pip install --force-reinstall --no-deps rpi-lgpio
 ### Music quiz
 
 Select **Music quiz**, connect the phone to **Jukeboks**, and play music.
-The first debounced arcade press wins: **ARCADE_1 turns the strip red** and
-**ARCADE_2 turns it green**. The jukebox requests Bluetooth AVRCP pause and plays
+The first debounced arcade press wins: **ARCADE_1 is Player 2 and turns the strip green**;
+**ARCADE_2 is Player 1 and turns it red**. The jukebox requests Bluetooth AVRCP pause and plays
 a short synthesized buzzer through the current output. Further presses are
 ignored until the phone reports paused/stopped and then playing again. Resume
 from the phone to restore the equalizer and start the next round.

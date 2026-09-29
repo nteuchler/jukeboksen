@@ -57,6 +57,31 @@ def test_web_changes_mode_and_returns_status():
     assert response.get_json()["status"]["mode"] == "local_files"
 
 
+def test_website_can_enable_and_disable_encoder_button(monkeypatch):
+    from simple_jukebox.input_service import InputService
+    from simple_jukebox.oled import OledService
+
+    monkeypatch.setattr(InputService, "start", lambda self: None)
+    monkeypatch.setattr(OledService, "start", lambda self: None)
+    app = make_app()
+    try:
+        service = app.config["input_service"]
+        client = app.test_client()
+        assert b'id="encoder-button-toggle"' in client.get("/").data
+        for enabled in (False, True, False):
+            response = client.post("/api/inputs/encoder", json={"enabled": enabled})
+            assert response.status_code == 200
+            assert response.get_json()["status"]["encoder_button_disabled"] is not enabled
+            assert client.get("/api/inputs").get_json()["status"]["encoder_button_disabled"] is not enabled
+        for data in ({}, {"enabled": "false"}, {"enabled": 0}, []):
+            assert client.post("/api/inputs/encoder", json=data).status_code == 400
+        assert service.status()["encoder_button_disabled"] is True
+    finally:
+        app.config["engine"].close()
+        app.config["oled"].stop()
+        app.config["input_service"].stop()
+
+
 def test_web_rejects_unknown_mode():
     app = make_app()
     response = app.test_client().post("/api/mode", json={"mode": "unknown"})

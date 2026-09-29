@@ -50,6 +50,8 @@ class InputService:
         self._on_arcade_press = on_arcade_press
         self._encoder_previous: int | None = None
         self._encoder_steps = 0
+        self._encoder_press_since: float | None = None
+        self._encoder_button_disabled = False
         self._events: Deque[Tuple[float, str]] = deque(maxlen=max_events)
         self._coin_count = 0
         self._states: Dict[str, bool] = {name: False for name in PIN_MAP}
@@ -71,6 +73,8 @@ class InputService:
         self._error = None
         self._encoder_previous = None
         self._encoder_steps = 0
+        self._encoder_press_since = None
+        self._encoder_button_disabled = False
         self._configured_inputs.clear()
         self._stop_polling.clear()
         if self._gpio is None:
@@ -158,7 +162,24 @@ class InputService:
                     and now - self._candidate_since[name] >= self._debounce_seconds
                 ):
                     self._states[name] = pressed
-                    if pressed:
+                    if name == "ENCODER_PRESS":
+                        if pressed:
+                            self._encoder_press_since = self._candidate_since[name]
+                        else:
+                            held_since = self._encoder_press_since
+                            self._encoder_press_since = None
+                            if held_since is not None and self._candidate_since[name] - held_since >= 2.0:
+                                self._disable_encoder_button()
+                            if self._armed[name] and held_since is not None and not self._encoder_button_disabled:
+                                self._events.append((time.time(), name))
+                                if self._on_encoder_press is not None:
+                                    try:
+                                        self._on_encoder_press()
+                                    except Exception:
+                                        LOGGER.exception("Encoder mute command failed")
+                            self._armed[name] = True
+                        # Encoder clicks act on release so a stuck press cannot mute.
+                    elif pressed:
                         if self._armed[name]:
                             self._events.append((time.time(), name))
                             if name == "COIN":
@@ -168,13 +189,29 @@ class InputService:
                                     self._on_arcade_press(int(name[-1]))
                                 except Exception:
                                     LOGGER.exception("Arcade command failed")
-                            if name == "ENCODER_PRESS" and self._on_encoder_press is not None:
-                                try:
-                                    self._on_encoder_press()
-                                except Exception:
-                                    LOGGER.exception("Encoder mute command failed")
                     else:
                         self._armed[name] = True
+                if (
+                    name == "ENCODER_PRESS"
+                    and pressed
+                    and self._encoder_press_since is not None
+                    and now - self._encoder_press_since >= 2.0
+                ):
+                    self._disable_encoder_button()
+
+    def _disable_encoder_button(self) -> None:
+        if not self._encoder_button_disabled:
+            self._encoder_button_disabled = True
+            LOGGER.warning("Encoder button disabled after a 2-second hold; enable from website to re-enable")
+
+    def set_encoder_button_enabled(self, enabled: bool) -> None:
+        """Set click availability without turning an existing held press into a click."""
+        with self._lock:
+            self._encoder_button_disabled = not enabled
+            held = self._states["ENCODER_PRESS"] or self._candidates["ENCODER_PRESS"]
+            self._armed["ENCODER_PRESS"] = not held
+            self._encoder_press_since = time.monotonic() if held else None
+            self._candidate_since["ENCODER_PRESS"] = time.monotonic()
 
     def _poll_encoder(self) -> None:
         if not {"ENCODER_A", "ENCODER_B"} <= self._configured_inputs:
@@ -227,6 +264,7 @@ class InputService:
             coin_count = self._coin_count
         return {
             "coin_count": coin_count,
+            "encoder_button_disabled": self._encoder_button_disabled,
             "running": self._running,
             "backend": "RPi.GPIO" if self._use_gpio else "mock",
             "configured_inputs": sorted(self._configured_inputs),

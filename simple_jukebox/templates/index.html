@@ -15,11 +15,14 @@
     #volume:disabled + output { color: #777; }
     output { min-width: 3.5rem; font-weight: bold; }
     #error { color: #a21d1d; }
+    #power-warning { background: #fff0c2; color: #664500; border: 2px solid #b87900; padding: 1rem; border-radius: 10px; }
+    #power-warning[data-active="true"] { background: #ffe0dc; color: #851b12; border-color: #b52b20; }
     #coin-count { font-size: 2.5rem; color: #176b55; }
   </style>
 </head>
 <body>
   <h1>Jukeboks control</h1>
+  <p id="power-warning" role="status" aria-live="polite" hidden></p>
   <section aria-labelledby="coin-heading">
     <h2 id="coin-heading">Coins detected</h2>
     <output id="coin-count" aria-live="polite" aria-label="Coins detected">—</output>
@@ -66,6 +69,8 @@
   <section>
     <h2>Inputs</h2>
     <p id="inputs-status"></p>
+    <p id="encoder-button-status" aria-live="polite"></p>
+    <button id="encoder-button-toggle" role="switch" aria-checked="true" disabled>Disable encoder button</button>
     <div id="inputs-states">Loading inputs…</div>
     <h3>Recent events (30 minutes)</h3>
     <div id="inputs-log" style="max-height:220px; overflow:auto; font-family: monospace; background:#f7f7f7; padding:.5rem; border-radius:6px;">Loading…</div>
@@ -79,6 +84,17 @@
     }
     async function refresh() {
       const status = await api('/api/status');
+      const power = status.power;
+      const powerWarning = document.querySelector('#power-warning');
+      powerWarning.hidden = Boolean(power?.available && !power.undervoltage && !power.undervoltage_occurred);
+      powerWarning.dataset.active = String(Boolean(power?.undervoltage));
+      powerWarning.textContent = !power?.available
+        ? 'Power monitoring unavailable.'
+        : power.undervoltage
+        ? 'Power warning: supply voltage is too low now. Check the power supply, cable, and connected loads. Bluetooth and audio may be unreliable.'
+        : power.undervoltage_occurred
+        ? 'Power warning: low supply voltage was detected earlier since the Pi booted. Voltage is normal now. Check the power supply and cable; this history clears after reboot.'
+        : '';
       document.querySelector('#mode').textContent = `Mode: ${status.mode}`;
       document.querySelector('#message').textContent = status.message;
       const quiz = document.querySelector('#quiz-status');
@@ -109,6 +125,13 @@
         const inputs = await api('/api/inputs');
         const states = inputs.states || {};
         const inputStatus = inputs.status || {};
+        document.querySelector('#encoder-button-status').textContent = inputStatus.encoder_button_disabled
+          ? 'Encoder button disabled. Rotation still controls volume.'
+          : 'Encoder button enabled';
+        const encoderToggle = document.querySelector('#encoder-button-toggle');
+        encoderToggle.disabled = typeof inputStatus.encoder_button_disabled !== 'boolean';
+        encoderToggle.textContent = inputStatus.encoder_button_disabled ? 'Enable encoder button' : 'Disable encoder button';
+        encoderToggle.setAttribute('aria-checked', String(!inputStatus.encoder_button_disabled));
         document.querySelector('#coin-count').textContent = inputStatus.coin_count ?? '—';
         document.querySelector('#inputs-status').textContent = inputStatus.error
           ? `GPIO error: ${inputStatus.error}`
@@ -138,6 +161,9 @@
     document.querySelector('#play').onclick = () => act('/api/play', {track: document.querySelector('#tracks').value});
     document.querySelector('#stop').onclick = () => act('/api/stop', {});
     document.querySelector('#mute').onclick = () => act('/api/mute', {});
+    document.querySelector('#encoder-button-toggle').onclick = event => act('/api/inputs/encoder', {
+      enabled: event.currentTarget.getAttribute('aria-checked') !== 'true'
+    });
     const volume = document.querySelector('#volume');
     volume.oninput = () => { document.querySelector('#volume-value').textContent = `${volume.value}%`; };
     volume.onchange = () => act('/api/volume', {volume: Number(volume.value)});

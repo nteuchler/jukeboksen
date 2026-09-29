@@ -13,6 +13,7 @@ from simple_jukebox.input_service import InputService
 from simple_jukebox.oled import OledService
 from simple_jukebox.nfc import NfcReader
 from simple_jukebox.quiz import BluetoothMedia, QuizBuzzer
+from simple_jukebox.power import power_status
 from simple_jukebox.state_machine import StateMachine
 
 
@@ -50,7 +51,7 @@ def create_app(
             Command(CommandType.ADJUST_VOLUME, direction * 5)
         ),
         on_encoder_press=lambda: encoder_command(Command(CommandType.TOGGLE_OUTPUT_MUTE)),
-        on_arcade_press=lambda player: encoder_command(Command(CommandType.ARCADE_PRESS, player)),
+        on_arcade_press=lambda button: encoder_command(Command(CommandType.ARCADE_PRESS, 3 - button)),
     )
     input_service.start()
 
@@ -80,6 +81,7 @@ def create_app(
         data["output_muted"] = volume.is_muted()
         data["rgb"] = rgb.status()
         data["oled"] = oled.status()
+        data["power"] = power_status()
         return data
 
     @app.get("/api/tracks")
@@ -120,6 +122,15 @@ def create_app(
         if not service:
             return jsonify({"states": {}})
         return jsonify({"states": service.get_states(), "status": service.status()})
+
+    @app.post("/api/inputs/encoder")
+    def set_encoder_button_enabled():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get("enabled"), bool):
+            return jsonify({"ok": False, "error": "enabled must be a boolean"}), 400
+        service = app.config["input_service"]
+        service.set_encoder_button_enabled(data["enabled"])
+        return jsonify({"ok": True, "status": service.status()})
 
     @app.get("/api/inputs/log")
     def inputs_log():
