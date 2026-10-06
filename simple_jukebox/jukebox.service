@@ -1,0 +1,16 @@
+[Unit]
+Description=Jukeboks web and hardware controller
+Wants=pulseaudio.service mpris-proxy.service
+After=pulseaudio.service mpris-proxy.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/jukeboksen
+ExecStart=%h/jukeboksen/simple_jukebox/.venv/bin/python -m simple_jukebox.app
+Environment=PYTHONUNBUFFERED=1
+KillSignal=SIGINT
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

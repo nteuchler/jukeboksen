@@ -59,7 +59,8 @@ def test_navigation_debounce_hold_and_disable(name, pin, direction):
 def test_navigation_wiring_wraparound_and_website_disable(monkeypatch):
     monkeypatch.setattr(InputService, 'start', lambda self: None)
     monkeypatch.setattr(OledService, 'start', lambda self: None)
-    reader = SimpleNamespace(start=lambda: None, stop=lambda: None, status=lambda: {})
+    reader = SimpleNamespace(start=lambda: None, stop=lambda: None,
+                             status=lambda: {}, drain_events=lambda: [])
     app = create_app(player=FakePlayer(), bluetooth=FakeBluetooth(),
                      volume=FakeVolume(), rgb=FakeRgb(), nfc=reader)
     engine = app.config['engine']

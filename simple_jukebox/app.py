@@ -12,6 +12,7 @@ from simple_jukebox.services import JukeboxServices
 from simple_jukebox.input_service import InputService
 from simple_jukebox.oled import OledService
 from simple_jukebox.nfc import NfcReader
+from simple_jukebox.nfc_actions import NfcActions
 from simple_jukebox.quiz import BluetoothMedia, QuizBuzzer
 from simple_jukebox.power import power_status
 from simple_jukebox.state_machine import StateMachine
@@ -33,7 +34,8 @@ def create_app(
                                nfc if nfc is not None else NfcReader(),
                                quiz_media if quiz_media is not None else BluetoothMedia(),
                                buzzer if buzzer is not None else QuizBuzzer(),
-                               survival_audio if survival_audio is not None else SurvivalAudio())
+                               survival_audio if survival_audio is not None else SurvivalAudio(),
+                               NfcActions(player))
     machine = StateMachine(services)
     engine = CommandEngine(machine, services)
     oled = OledService(machine.status)
@@ -92,6 +94,20 @@ def create_app(
     def tracks():
         return jsonify({"tracks": player.tracks()})
 
+    @app.get("/api/nfc/actions")
+    def nfc_actions():
+        try:
+            return jsonify({"actions": services.nfc_actions.choices()})
+        except (OSError, ValueError) as error:
+            return jsonify({"error": str(error)}), 400
+
+    @app.post("/api/nfc/simulate")
+    def simulate_nfc():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get("text"), str):
+            return jsonify({"ok": False, "error": "Choose a configured NFC action"}), 400
+        return run_command(Command(CommandType.SIMULATE_NFC, data["text"]))
+
     @app.post("/api/mode")
     def mode():
         data = request.get_json(silent=True) or {}
@@ -108,6 +124,17 @@ def create_app(
     def play():
         data = request.get_json(silent=True) or {}
         return run_command(Command(CommandType.PLAY, data.get("track", "")))
+
+    @app.post("/api/replay")
+    def replay():
+        return run_command(Command(CommandType.REPLAY))
+
+    @app.post("/api/text/play")
+    def play_text():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or not isinstance(data.get("text"), str) or data.get("type") not in ("tts", "text2music"):
+            return jsonify({"ok": False, "error": "Provide text and choose TTS or text2Music"}), 400
+        return run_command(Command(CommandType.PLAY_TEXT, {"text": data["text"], "type": data["type"]}))
 
     @app.post("/api/stop")
     def stop():

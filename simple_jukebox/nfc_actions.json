@@ -1,0 +1,18 @@
+{
+  "play-song": {
+    "type": "file",
+    "file": "song.mp3"
+  },
+  "hello": {
+    "type": "tts",
+    "text": "Hej og velkommen til jukeboksen!",
+    "voice": "da",
+    "rate": 145
+  },
+  "hej": {
+    "type": "tts",
+    "text": "Hej og velkommen til jukeboksen!",
+    "voice": "da",
+    "rate": 145
+  }
+}

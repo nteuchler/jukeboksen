@@ -54,6 +54,8 @@ class RgbService(Protocol):
 
 
 class NfcService(Protocol):
+    def drain_events(self) -> list[dict]: ...
+
     def start(self) -> None: ...
 
     def stop(self) -> None: ...
@@ -73,6 +75,7 @@ class JukeboxServices:
     quiz_media: QuizMediaService | None = None
     buzzer: BuzzerService | None = None
     survival_audio: SurvivalAudioService | None = None
+    nfc_actions: NfcActionService | None = None
 
 
 class QuizMediaService(Protocol):
@@ -90,3 +93,16 @@ class SurvivalAudioService(Protocol):
     error: str | None
     def play(self, cue: str) -> None: ...
     def stop(self) -> None: ...
+
+
+class NfcActionService(Protocol):
+    match: str | None
+    error: str | None
+    selected_action: dict | None
+    def play_action(self, action: dict) -> None: ...
+
+    def choices(self) -> list[dict]: ...
+
+    def trigger(self, texts: list[str]) -> str: ...
+    def stop(self) -> None: ...
+    def status(self) -> dict: ...

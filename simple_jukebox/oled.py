@@ -28,7 +28,9 @@ def status_lines(status):
         nfc = status.get("nfc") or {}
         return ["NFC reader", "Reader error" if nfc.get("error") else
                 "Tag detected" if nfc.get("uid") else "Waiting for tag",
-                str(nfc.get("last_uid") or ""), str(nfc.get("error") or "Present an NFC tag")]
+                str(" / ".join(nfc.get("last_texts") or []) or nfc.get("last_uid") or ""),
+                str(nfc.get("error") or nfc.get("text_error") or
+                    (status.get("nfc_action") or {}).get("error") or status.get("message") or "Present an NFC tag")]
     if mode == "bluetooth":
         playback = "BT ready" if status.get("bluetooth_active") else "BT inactive"
     else:

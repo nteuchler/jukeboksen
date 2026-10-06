@@ -16,6 +16,9 @@ from simple_jukebox.services import JukeboxServices
 class CommandType(str, Enum):
     CHANGE_MODE = "change_mode"
     NAVIGATE_MODE = "navigate_mode"
+    SIMULATE_NFC = "simulate_nfc"
+    PLAY_TEXT = "play_text"
+    REPLAY = "replay"
     PLAY = "play"
     STOP = "stop"
     TOGGLE_MUTE = "toggle_mute"
@@ -101,6 +104,7 @@ class CommandEngine:
                 except queue.Empty:
                     break
             if self._queue.empty():
+                self.machine.poll_nfc()
                 self.machine.poll_quiz()
                 self.machine.poll_survival()
                 await asyncio.sleep(0.01)
@@ -116,12 +120,19 @@ class CommandEngine:
             finally:
                 self._queue.task_done()
             self.machine.poll_survival()
+            self.machine.poll_nfc()
 
     def _handle(self, command: Command) -> Any:
         if command.type is CommandType.CHANGE_MODE:
             return self.machine.change_mode(command.value)
         if command.type is CommandType.NAVIGATE_MODE:
             return self.machine.navigate_mode(command.value)
+        if command.type is CommandType.SIMULATE_NFC:
+            return self.machine.simulate_nfc(command.value)
+        if command.type is CommandType.PLAY_TEXT:
+            return self.machine.play_text(command.value["text"], command.value["type"])
+        if command.type is CommandType.REPLAY:
+            return self.machine.replay()
         if command.type is CommandType.PLAY:
             return self.machine.play(command.value)
         if command.type is CommandType.STOP:

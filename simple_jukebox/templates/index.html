@@ -7,13 +7,15 @@
   <style>
     body { font-family: sans-serif; max-width: 650px; margin: 2rem auto; padding: 0 1rem; background: #f3f1eb; color: #202020; }
     section { background: white; padding: 1.2rem; margin: 1rem 0; border-radius: 10px; }
-    button, select, input { font: inherit; padding: .7rem 1rem; margin: .25rem; }
+    button, select, input, textarea { font: inherit; padding: .7rem 1rem; margin: .25rem; }
     button.active { background: #176b55; color: white; }
     .control-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
     input[type="range"] { flex: 1; min-width: 180px; padding-left: 0; padding-right: 0; }
     #volume:disabled { accent-color: #888; filter: grayscale(1); opacity: .5; cursor: not-allowed; }
     #volume:disabled + output { color: #777; }
     output { min-width: 3.5rem; font-weight: bold; }
+    textarea { box-sizing: border-box; width: 100%; margin: .5rem 0; resize: vertical; }
+    #last-played, #text-play-status { overflow-wrap: anywhere; }
     #error { color: #a21d1d; }
     #power-warning { background: #fff0c2; color: #664500; border: 2px solid #b87900; padding: 1rem; border-radius: 10px; }
     #power-warning[data-active="true"] { background: #ffe0dc; color: #851b12; border-color: #b52b20; }
@@ -58,11 +60,47 @@
     <p>Each coin refills the timer. Warnings play as time runs out; the alarm repeats until you insert a coin or leave this mode. Changing the duration restarts an active countdown.</p>
     <p id="survival-error" role="alert"></p>
   </section>
+  <section aria-labelledby="replay-heading">
+    <h2 id="replay-heading">Replay</h2>
+    <p id="last-played">Nothing played yet.</p>
+    <button id="replay" disabled>Replay last item</button>
+    <button id="replay-stop">Stop</button>
+    <p id="replay-error" role="alert"></p>
+  </section>
+  <section aria-labelledby="text-play-heading">
+    <h2 id="text-play-heading">Play your text</h2>
+    <form id="text-play-form">
+      <label for="play-text">Text to play</label>
+      <textarea id="play-text" rows="3" maxlength="10000" placeholder="Skriv en tekst på dansk…" required></textarea>
+      <label for="text-play-type">Play using</label>
+      <select id="text-play-type">
+        <option value="tts">Danish TTS</option>
+        <option value="text2music">text2Music</option>
+      </select>
+      <button id="text-play" type="submit">Play text</button>
+      <button id="text-stop" type="button">Stop</button>
+    </form>
+    <p>TTS speaks Danish. text2Music builds your sentence from song clips and speaks missing words in Danish. Playing switches to Local files mode.</p>
+    <p id="text-play-status" role="status" aria-live="polite"></p>
+    <p id="text-play-error" role="alert"></p>
+  </section>
   <section>
     <h2>Local music</h2>
     <select id="tracks"></select>
     <button id="play">Play</button>
     <button id="stop">Stop</button>
+  </section>
+  <section aria-labelledby="nfc-play-heading">
+    <h2 id="nfc-play-heading">Try an NFC tag</h2>
+    <p>Play a configured tag without scanning it. This switches to NFC mode.</p>
+    <label for="nfc-actions">NFC music or speech</label>
+    <select id="nfc-actions" style="max-width:100%" disabled><option>Loading…</option></select>
+    <p id="nfc-preview"></p>
+    <button id="nfc-play" disabled>Play selected tag</button>
+    <button id="nfc-stop">Stop</button>
+    <button id="nfc-reload">Refresh list</button>
+    <p id="nfc-play-status" role="status" aria-live="polite"></p>
+    <p id="nfc-play-error" role="alert"></p>
   </section>
   <section>
     <h2>Volume</h2>
@@ -98,6 +136,7 @@
   </section>
   <script>
     let survivalSettingsDirty = false;
+    let replayBusy = false;
     async function api(url, body) {
       const response = await fetch(url, {method: body ? 'POST' : 'GET', headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
       const data = await response.json();
@@ -119,6 +158,10 @@
         : '';
       document.querySelector('#mode').textContent = `Mode: ${status.mode}`;
       document.querySelector('#message').textContent = status.message;
+      document.querySelector('#last-played').textContent = status.last_played || 'Nothing played yet.';
+      document.querySelector('#replay').disabled = replayBusy || !status.last_played;
+      document.querySelector('#text-play-status').textContent = ['local_files', 'nfc'].includes(status.mode)
+        ? (status.nfc_action?.error || status.message) : '';
       const quiz = document.querySelector('#quiz-status');
       quiz.hidden = status.mode !== 'music_quiz';
       quiz.textContent = status.quiz?.error || (status.quiz?.winner
@@ -139,7 +182,7 @@
         bar.style.width = `${fraction * 100}%`;
         bar.style.backgroundColor = `hsl(${120 * fraction}, 80%, 40%)`;
       });
-      document.querySelector('#details').textContent = status.playing ? `Playing: ${status.track}${status.output_muted ? ' (muted)' : ''}` : status.bluetooth_active ? 'Bluetooth active' : 'Not playing';
+      document.querySelector('#details').textContent = status.playing ? `Playing: ${status.track || ((status.nfc_action || {}).speaking ? status.last_played || 'Text audio' : '')}${status.output_muted ? ' (muted)' : ''}` : status.bluetooth_active ? 'Bluetooth active' : 'Not playing';
       document.querySelectorAll('.mode').forEach(button => button.classList.toggle('active', button.dataset.mode === status.mode));
       const volume = document.querySelector('#volume');
       volume.disabled = status.output_muted;
@@ -151,11 +194,13 @@
       document.querySelector('#volume-value').textContent = `${volume.value}%${status.output_muted ? ' (muted)' : ''}`;
       document.querySelectorAll('.rgb').forEach(button => button.classList.toggle('active', button.dataset.rgb === status.rgb.mode));
       document.querySelector('#rgb-error').textContent = status.rgb.error || '';
+      document.querySelector('#nfc-play-status').textContent = status.mode === 'nfc'
+        ? (status.nfc_action?.error || status.message) : '';
       const nfc = status.nfc || {};
       document.querySelector('#nfc-status').textContent = status.mode !== 'nfc' ? ''
         : nfc.error ? `NFC error: ${nfc.error}`
         : !nfc.connected ? 'Connecting to NFC reader…'
-        : `NFC: ${nfc.uid || 'waiting for tag'} | Last UID: ${nfc.last_uid || 'none'} | Detections: ${nfc.detections}`;
+        : `NFC: ${nfc.uid || 'waiting for tag'} | Last UID: ${nfc.last_uid || 'none'} | Text: ${(nfc.last_texts || []).join(' / ') || 'none'} | ${nfc.text_error || (status.nfc_action || {}).error || ''} | Detections: ${nfc.detections}`;
       // fetch inputs
       try {
         const inputs = await api('/api/inputs');
@@ -192,6 +237,53 @@
       document.querySelector('#error').textContent = '';
       try { await api(url, body); await refresh(); } catch (error) { document.querySelector('#error').textContent = error.message; }
     }
+    let nfcChoices = [];
+    let nfcBusy = false;
+    const nfcSelect = document.querySelector('#nfc-actions');
+    function showNfcPreview() {
+      const choice = nfcChoices.find(item => item.text === nfcSelect.value);
+      document.querySelector('#nfc-preview').textContent = choice
+        ? `${choice.type === 'file' ? 'Audio file' : choice.type === 'text2music' ? 'text2Music' : 'Speech'}: ${choice.description}` : '';
+    }
+    async function loadNfcActions() {
+      const previous = nfcSelect.value;
+      document.querySelector('#nfc-play-error').textContent = '';
+      document.querySelector('#nfc-play').disabled = true;
+      nfcSelect.disabled = true;
+      try {
+        const data = await api('/api/nfc/actions');
+        nfcChoices = data.actions;
+        nfcSelect.replaceChildren(...nfcChoices.map(choice =>
+          new Option(`${choice.text} — ${choice.type === 'file' ? 'Music / audio' : choice.type === 'text2music' ? 'text2Music' : 'Speech'}`, choice.text)));
+        if (nfcChoices.some(choice => choice.text === previous)) nfcSelect.value = previous;
+        if (!nfcChoices.length) nfcSelect.add(new Option('No NFC actions configured', ''));
+        nfcSelect.disabled = !nfcChoices.length;
+        document.querySelector('#nfc-play').disabled = nfcBusy || !nfcChoices.length;
+      } catch (error) {
+        nfcChoices = [];
+        nfcSelect.replaceChildren(new Option('Unable to load NFC actions', ''));
+        document.querySelector('#nfc-play-error').textContent = error.message;
+      }
+      showNfcPreview();
+    }
+    nfcSelect.onchange = showNfcPreview;
+    document.querySelector('#nfc-reload').onclick = loadNfcActions;
+    document.querySelector('#nfc-play').onclick = async () => {
+      nfcBusy = true;
+      document.querySelector('#nfc-play').disabled = true;
+      document.querySelector('#nfc-play-error').textContent = '';
+      try {
+        await api('/api/nfc/simulate', {text: nfcSelect.value});
+        await refresh();
+      } catch (error) {
+        document.querySelector('#nfc-play-error').textContent = error.message;
+      } finally {
+        nfcBusy = false;
+        document.querySelector('#nfc-play').disabled = !nfcChoices.length;
+      }
+    };
+    document.querySelector('#nfc-stop').onclick = () => act('/api/stop', {});
+    loadNfcActions();
     async function refreshLog() {
       try {
         const log = await api('/api/inputs/log');
@@ -213,6 +305,36 @@
         await refresh();
       } catch (error) { document.querySelector('#error').textContent = error.message; }
     };
+    document.querySelector('#replay').onclick = async () => {
+      replayBusy = true;
+      document.querySelector('#replay').disabled = true;
+      document.querySelector('#replay-error').textContent = '';
+      try {
+        await api('/api/replay', {});
+      } catch (error) {
+        document.querySelector('#replay-error').textContent = error.message;
+      } finally {
+        replayBusy = false;
+        await refresh();
+      }
+    };
+    document.querySelector('#text-play-form').onsubmit = async event => {
+      event.preventDefault();
+      const button = document.querySelector('#text-play');
+      button.disabled = true;
+      document.querySelector('#text-play-error').textContent = '';
+      try {
+        await api('/api/text/play', {
+          text: document.querySelector('#play-text').value,
+          type: document.querySelector('#text-play-type').value
+        });
+        await refresh();
+      } catch (error) {
+        document.querySelector('#text-play-error').textContent = error.message;
+      } finally { button.disabled = false; }
+    };
+    document.querySelector('#replay-stop').onclick = () => act('/api/stop', {});
+    document.querySelector('#text-stop').onclick = () => act('/api/stop', {});
     document.querySelector('#play').onclick = () => act('/api/play', {track: document.querySelector('#tracks').value});
     document.querySelector('#stop').onclick = () => act('/api/stop', {});
     document.querySelector('#mute').onclick = () => act('/api/mute', {});

@@ -6,7 +6,11 @@ Recorded from the actual Pi on **2026-09-29**. This guide covers the current
 writing this guide did not change the current Pi's system configuration.
 
 For the shortest route, follow sections 1–7, then use the acceptance checklist.
-The optional boot service is a proposed convenience, not an existing deployment.
+Deployment update, **2026-10-06**: the current Pi now runs the checked-in
+`jukebox.service` as an enabled user service, with lingering enabled. Its HTTP
+API, GPIO inputs, OLED connection, and PulseAudio DAC routing were checked.
+The virtual environment uses `rpi-lgpio` with legacy `RPi.GPIO` removed.
+An actual reboot has not been tested. Inventory below otherwise records 2026-09-29.
 
 ## 1. Base system
 
@@ -338,7 +342,8 @@ The test suite does not replace the physical acceptance checks above.
 
 ## 8. Optional: start the app at boot
 
-This user-service template is **not installed or boot-tested on the current Pi**.
+This user service was installed and enabled on the current Pi on 2026-10-06;
+startup and restart were checked, but an actual reboot has not been tested.
 First get manual startup and audio working. Stop the manually launched app.
 Create `~/.config/systemd/user/jukebox.service` (create the directory if needed):
 

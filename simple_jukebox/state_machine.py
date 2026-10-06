@@ -24,6 +24,7 @@ class StateMachine:
         self.services = services
         self.mode = Mode.IDLE
         self.message = "Ready"
+        self.last_played = None
         self._lock = threading.RLock()
         self.quiz_winner = None
         self.quiz_error = None
@@ -77,6 +78,62 @@ class StateMachine:
             else:
                 self.message = "Ready"
             self.mode = target
+
+    def simulate_nfc(self, text):
+        with self._lock:
+            actions = self.services.nfc_actions
+            if actions is None:
+                raise RuntimeError('NFC playback is not configured')
+            if not isinstance(text, str) or text not in {item['text'] for item in actions.choices()}:
+                raise ValueError('Choose a configured NFC action')
+            self.change_mode('nfc')
+            self.message = actions.trigger([text])
+            if actions.status()['error']:
+                raise RuntimeError(actions.status()['error'])
+            self._remember_nfc()
+
+    def _remember_nfc(self):
+        actions = self.services.nfc_actions
+        if actions.match is not None and actions.error is None:
+            self.last_played = {'action': dict(actions.selected_action), 'mode': 'nfc',
+                                'label': f'NFC: {actions.match}'}
+
+    def play_text(self, text, kind):
+        if kind not in {'tts', 'text2music'}:
+            raise ValueError('Choose TTS or text2Music')
+        if not isinstance(text, str) or not text.strip() or len(text) > 10000:
+            raise ValueError('Enter between 1 and 10000 characters')
+        with self._lock:
+            if self.services.nfc_actions is None:
+                raise RuntimeError('Text playback is not configured')
+            self.change_mode('local_files')
+            action = {'type': kind, 'text': text, 'voice': 'da'}
+            self.services.nfc_actions.play_action(action)
+            self.last_played = {'action': action, 'mode': 'local_files',
+                                'label': f'{"Danish TTS" if kind == "tts" else "text2Music"}: {text}'}
+            self.message = 'Speaking Danish text' if kind == 'tts' else 'Preparing text2Music'
+
+    def replay(self):
+        with self._lock:
+            if self.last_played is None:
+                raise ValueError('Nothing has been played yet')
+            item = self.last_played
+            if self.services.nfc_actions is None:
+                raise RuntimeError('Replay is not configured')
+            self.change_mode(item['mode'])
+            self.services.nfc_actions.play_action(item['action'])
+            self.message = f"Replaying {item['label']}"
+
+    def poll_nfc(self):
+        with self._lock:
+            if self.mode is not Mode.NFC or self.services.nfc_actions is None:
+                return
+            for event in self.services.nfc.drain_events():
+                if event['error']:
+                    self.message = f"NFC text error: {event['error']}"
+                else:
+                    self.message = self.services.nfc_actions.trigger(event['texts'])
+                    self._remember_nfc()
 
     def configure_survival(self, minutes):
         with self._lock:
@@ -153,12 +210,19 @@ class StateMachine:
         with self._lock:
             if self.mode is not Mode.LOCAL_FILES:
                 raise RuntimeError("Switch to Local files mode first")
+            if self.services.nfc_actions is not None:
+                self.services.nfc_actions.stop()
             self.services.audio.play(track)
+            self.last_played = {"action": {"type": "file", "file": track},
+                                "mode": "local_files", "label": track}
             self.message = f"Playing {track}"
 
     def stop_audio(self) -> None:
         with self._lock:
-            self.services.audio.stop()
+            if self.services.nfc_actions is not None:
+                self.services.nfc_actions.stop()
+            else:
+                self.services.audio.stop()
             self.message = "Playback stopped"
 
     def toggle_mute(self) -> bool:
@@ -172,7 +236,11 @@ class StateMachine:
             return {
                 "mode": self.mode.value,
                 "message": self.message,
-                "playing": self.services.audio.playing,
+                "playing": self.services.audio.playing or bool(
+                    self.mode in {Mode.NFC, Mode.LOCAL_FILES} and self.services.nfc_actions
+                    and self.services.nfc_actions.status()["speaking"]),
+                "nfc_action": self.services.nfc_actions.status() if self.services.nfc_actions else None,
+                "last_played": self.last_played["label"] if self.last_played else None,
                 "track": self.services.audio.current_track,
                 "muted": self.services.audio.muted,
                 "nfc": self.services.nfc.status() if self.services.nfc else None,
@@ -192,7 +260,10 @@ class StateMachine:
             self.survival.stop()
             self.services.rgb.set_mode(self._previous_rgb)
         if self.mode is Mode.LOCAL_FILES:
-            self.services.audio.stop()
+            if self.services.nfc_actions is not None:
+                self.services.nfc_actions.stop()
+            else:
+                self.services.audio.stop()
         if self.mode in {Mode.BLUETOOTH, Mode.MUSIC_QUIZ}:
             self.services.bluetooth.stop()
         if self.mode is Mode.MUSIC_QUIZ:
@@ -205,3 +276,5 @@ class StateMachine:
             self._quiz_saw_pause = False
         if self.mode is Mode.NFC and self.services.nfc is not None:
             self.services.nfc.stop()
+            if self.services.nfc_actions is not None:
+                self.services.nfc_actions.stop()

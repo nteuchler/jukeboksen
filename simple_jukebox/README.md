@@ -7,6 +7,29 @@ For a replacement Pi, follow [Raspberry Pi setup and rebuild guide](RASPBERRY_PI
 
 ## Run
 
+On the configured Pi, `jukebox.service` starts the app at boot without login.
+The control page is at `http://jukeboks.local:5000` (or the Pi's IP address).
+Manage it as the `jukeboks` user:
+
+```bash
+systemctl --user status jukebox.service
+systemctl --user restart jukebox.service
+journalctl --user -u jukebox.service -f
+```
+
+The unit is saved in [jukebox.service](jukebox.service). To install it on a
+replacement Pi after setting up dependencies and audio:
+
+```bash
+install -D -m 644 simple_jukebox/jukebox.service ~/.config/systemd/user/jukebox.service
+sudo loginctl enable-linger "$USER"
+systemctl --user daemon-reload
+systemctl --user enable --now jukebox.service
+```
+
+Stop the service with `systemctl --user stop jukebox.service` before a manual
+run or hardware tests; start it again afterward.
+
 From the repository root:
 
 ```bash
@@ -64,6 +87,31 @@ Run the focused tests with:
 simple_jukebox/.venv/bin/python -m pytest -q simple_jukebox/tests
 ```
 
+### Replay and typed text
+
+**Replay last item** repeats the last local file, NFC action (real or simulated),
+or typed TTS/text2Music request. The last item survives Stop and mode changes
+within the app session, and resets when the service restarts. NFC replay retains
+the action's original settings even if you edit the mapping afterward.
+
+Under **Play your text**, enter a sentence and choose **Danish TTS** or
+**text2Music**. Playing switches to Local files mode. Both use the shared speaker
+volume/mute and can be stopped, replaced, or replayed. Leaving the mode stops
+playback and any synthesis in progress.
+
+text2Music calls the repo's `Text2Speech/bumblebee_player.py` renderer with the
+existing `Text2Speech/output/index.json` and WAV clip library. It uses the best
+matching song-word clips, phrase matching, volume normalization, and Danish TTS
+for missing words. The library must be present on a replacement Pi (it is not in
+Git). The jukebox requirements include `pydub` and Python 3.13's `audioop-lts`.
+Rendering runs in a cancellable subprocess; playback uses PulseAudio like TTS.
+Errors appear beside the text controls.
+
+`POST /api/text/play` accepts `{"type":"tts","text":"Hej"}` or
+`{"type":"text2music","text":"Hej"}`. `POST /api/replay` repeats the last item;
+`/api/status` includes its label as `last_played`. NFC mappings can also use
+`{"type":"text2music","text":"Hej med dig"}`.
+
 ### NFC reading state
 
 Select **NFC reader** on the control page (or POST `{"mode":"nfc"}` to
@@ -72,7 +120,54 @@ The web page and OLED show tag UIDs; `/api/status` includes `nfc` connection/err
 current `uid`, `last_uid`, and `detections` fields. A held tag counts once;
 removing and presenting it again, or presenting a different UID, counts again.
 Entering the state resets the previous scan results. This reads ISO14443A tag
-UIDs, not NDEF contents, and does not yet map tags to music.
+UIDs and NDEF Text records on supported Type 2 tags, and can map text to audio.
+
+#### NFC text → local audio or Danish speech
+
+Edit [nfc_actions.json](nfc_actions.json). Each key is the **exact text** stored
+in an NDEF Text record (case and whitespace matter):
+
+```json
+{
+  "min-sang": {"type": "file", "file": "min-sang.mp3"},
+  "hej": {
+    "type": "tts",
+    "text": "Hej og velkommen til jukeboksen!",
+    "voice": "da",
+    "rate": 145
+  }
+}
+```
+
+Put local audio in `simple_jukebox/media/`; `file` is a filename from the Local
+music list, without a directory. Replace the example `song.mp3` with your file.
+Write an **NDEF Text record**, such as `hej`, to a tag, then select **NFC reader**
+and present it. TTS runs offline with `espeak-ng`; Danish (`da`) is the default
+when `voice` is omitted. `rate` is words per minute (80–450, default 145).
+The spoken sentence comes from the mapping's `text` field.
+
+To try a mapping without a physical tag, use **Try an NFC tag** on the website.
+Choose an entry to preview its audio filename or spoken text, then click **Play
+selected tag**. This switches to NFC mode and plays the same configured action;
+you can click again to replay. **Stop** ends playback. **Refresh list** picks up
+mapping edits. Simulated plays do not increment physical tag detections.
+
+Mappings reload on every new presentation; no service restart is needed.
+Holding a tag plays once. Remove and present it again to replay. With multiple
+Text records, the first mapped record wins. A new valid action stops the previous
+NFC audio. Unmapped tags, malformed records, or invalid mappings display a message
+and leave current playback alone. **Stop** or leaving NFC mode stops both files
+and speech; volume and mute apply to both. Reading remains active during playback.
+
+The website and OLED show the last decoded text. `/api/status` adds `nfc.texts`,
+`nfc.last_texts`, `nfc.text_error`, and `nfc_action` (matched text, speech activity,
+and playback errors). UID detection remains available for unsupported tags.
+Text support covers unencrypted NFC Forum Type 2 NTAG213/215/216 and compatible
+Ultralight tags with an NDEF capability container, UTF-8/UTF-16 Text records,
+and short/long record lengths. MIFARE Classic, Type 4, chunked NDEF messages,
+and reserved-memory holes inside the NDEF area are not supported.
+Implementation references: [NXP NTAG memory layout](https://www.nxp.com/docs/en/data-sheet/NTAG213_215_216.pdf)
+and [Adafruit PN532 API](https://docs.circuitpython.org/projects/pn532/en/latest/api.html).
 
 The driver currently assumes a **PN532 configured for I2C**, using bus 1 and
 7-bit address `0x24`. SDA/SCL share GPIO2/GPIO3 with the OLED as described in
