@@ -43,6 +43,7 @@
     <button class="mode" data-mode="bluetooth">Bluetooth speaker</button>
     <button class="mode" data-mode="music_quiz">Music quiz</button>
     <button class="mode" data-mode="coin_survival">Coin survival</button>
+    <button class="mode" data-mode="sleeping">Sleeping</button>
     <p id="navigation-status" aria-live="polite">Loading navigation controls…</p>
     <button id="navigation-toggle" role="switch" aria-checked="true" disabled>Disable navigation buttons</button>
     <p id="quiz-status" hidden aria-live="polite"></p>
@@ -59,6 +60,20 @@
     </form>
     <p>Each coin refills the timer. Warnings play as time runs out; the alarm repeats until you insert a coin or leave this mode. Changing the duration restarts an active countdown.</p>
     <p id="survival-error" role="alert"></p>
+  </section>
+  <section aria-labelledby="sleeping-heading">
+    <h2 id="sleeping-heading">Sleeping</h2>
+    <output id="sleeping-time" aria-label="Alarm time">08:00</output>
+    <p id="sleeping-schedule"></p>
+    <p id="sleeping-status" role="status"></p>
+    <form id="sleeping-settings">
+      <label for="sleeping-alarm-time">Alarm time (24-hour HH:MM)</label>
+      <input id="sleeping-alarm-time" type="text" inputmode="numeric" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5" placeholder="08:00" value="08:00" required>
+      <button type="submit">Save alarm time</button>
+    </form>
+    <p>Select Sleeping mode to arm the next occurrence of your alarm time (Europe/Copenhagen). If that time has passed today, the alarm is set for tomorrow. The alarm repeats, starting at 50% volume and rising to 100% over two minutes. Press either arcade button to stop the alarm; five seconds later, hear “Godmorgen gruppe 5” and P8 Jazz. Press again to stop.</p>
+    <button id="sleeping-stop" type="button">Stop sleeping mode</button>
+    <p id="sleeping-error" role="alert"></p>
   </section>
   <section aria-labelledby="replay-heading">
     <h2 id="replay-heading">Replay</h2>
@@ -136,6 +151,7 @@
   </section>
   <script>
     let survivalSettingsDirty = false;
+    let sleepingSettingsDirty = false;
     let replayBusy = false;
     async function api(url, body) {
       const response = await fetch(url, {method: body ? 'POST' : 'GET', headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
@@ -169,6 +185,15 @@
         : 'Connect your phone to Jukeboks and play music. Arcade 1 = Player 2 / green; Arcade 2 = Player 1 / red. First press wins.');
       document.querySelectorAll('.rgb').forEach(button => button.disabled = ['music_quiz', 'coin_survival'].includes(status.mode));
       const survival = status.survival || {};
+      const sleeping = status.sleeping || {};
+      document.querySelector('#sleeping-time').textContent = sleeping.alarm_time || '08:00';
+      document.querySelector('#sleeping-schedule').textContent = sleeping.alarm_at
+        ? `Scheduled: ${new Date(sleeping.alarm_at).toLocaleString('da-DK', {timeZone: 'Europe/Copenhagen', hour12: false})} (Europe/Copenhagen)` : '24-hour format · Europe/Copenhagen';
+      document.querySelector('#sleeping-status').textContent = status.mode === 'sleeping' ? status.message : 'Select Sleeping mode to start.';
+      document.querySelector('#sleeping-error').textContent = sleeping.error || '';
+      if (!sleepingSettingsDirty) document.querySelector('#sleeping-alarm-time').value = sleeping.alarm_time || '08:00';
+      document.querySelector('#sleeping-settings button').textContent = status.mode === 'sleeping' ? 'Apply alarm time' : 'Save alarm time';
+      document.querySelector('#sleeping-stop').disabled = status.mode !== 'sleeping';
       const seconds = survival.active ? survival.remaining_seconds : (survival.minutes || 30) * 60;
       document.querySelector('#survival-time').textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
       document.querySelector('#survival-status').textContent = !survival.active
@@ -295,6 +320,17 @@
       }
     }
     document.querySelectorAll('.mode').forEach(button => button.onclick = () => act('/api/mode', {mode: button.dataset.mode}));
+    document.querySelector('#sleeping-alarm-time').oninput = () => { sleepingSettingsDirty = true; };
+    document.querySelector('#sleeping-settings').onsubmit = async event => {
+      event.preventDefault();
+      document.querySelector('#error').textContent = '';
+      try {
+        await api('/api/sleeping', {alarm_time: document.querySelector('#sleeping-alarm-time').value});
+        sleepingSettingsDirty = false;
+        await refresh();
+      } catch (error) { document.querySelector('#error').textContent = error.message; }
+    };
+    document.querySelector('#sleeping-stop').onclick = () => act('/api/mode', {mode: 'idle'});
     document.querySelector('#survival-minutes').oninput = () => { survivalSettingsDirty = true; };
     document.querySelector('#survival-settings').onsubmit = async event => {
       event.preventDefault();

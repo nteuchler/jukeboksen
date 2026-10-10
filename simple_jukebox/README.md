@@ -9,13 +9,47 @@ For a replacement Pi, follow [Raspberry Pi setup and rebuild guide](RASPBERRY_PI
 
 On the configured Pi, `jukebox.service` starts the app at boot without login.
 The control page is at `http://jukeboks.local:5000` (or the Pi's IP address).
-Manage it as the `jukeboks` user:
+Manage it as the `jukeboks` user.
+
+### Restart the service
+
+After changing the app code, restart the service and check that it is running:
 
 ```bash
-systemctl --user status jukebox.service
 systemctl --user restart jukebox.service
+systemctl --user status jukebox.service
+```
+
+To watch the service logs:
+
+```bash
 journalctl --user -u jukebox.service -f
 ```
+
+The normal app entrypoint also saves diagnostics to `simple_jukebox/logs/jukebox.log`
+without a browser connected. Files rotate at 2 MB with five backups (about 12 MB
+maximum); they survive restarts and are ignored by Git. Set `JUKEBOX_LOG_DIR` to
+override the directory. Timestamps are UTC. Logging includes initial GPIO levels,
+debounced press/release transitions, hardware/web command types, command failures,
+OLED/NFC errors, and a health/GPIO-register snapshot every 30 seconds. It does not
+log typed text or NFC text content. Disk writes run on a separate thread; the
+bounded logging queue can drop records under extreme load.
+
+```bash
+tail -f simple_jukebox/logs/jukebox.log
+```
+
+If you changed `simple_jukebox/jukebox.service`, run these commands from the
+repository root to install the updated unit and restart it:
+
+```bash
+install -D -m 644 simple_jukebox/jukebox.service ~/.config/systemd/user/jukebox.service
+systemctl --user daemon-reload
+systemctl --user restart jukebox.service
+systemctl --user status jukebox.service
+```
+
+### Install or run manually
 
 The unit is saved in [jukebox.service](jukebox.service). To install it on a
 replacement Pi after setting up dependencies and audio:
@@ -107,10 +141,36 @@ Git). The jukebox requirements include `pydub` and Python 3.13's `audioop-lts`.
 Rendering runs in a cancellable subprocess; playback uses PulseAudio like TTS.
 Errors appear beside the text controls.
 
+TTS and text2Music replace participant names with complete soundbytes from
+`simple_jukebox/assets/DeltagerJingles`. Filenames supply the names (for example,
+`Lea.mp3` and `Carl Christian.mp3`); matching ignores case and respects word
+boundaries. `Eskilds Jingle.mp3` also matches `Eskild`. Clips play at each mention
+between the surrounding speech or music. Add new audio files to this folder to
+make more names available on the next playback. TTS uses `ffmpeg` to decode clips.
+
 `POST /api/text/play` accepts `{"type":"tts","text":"Hej"}` or
 `{"type":"text2music","text":"Hej"}`. `POST /api/replay` repeats the last item;
 `/api/status` includes its label as `last_played`. NFC mappings can also use
 `{"type":"text2music","text":"Hej med dig"}`.
+
+### Sleeping mode
+
+Set **Alarm time** in the Sleeping section using 24-hour `HH:MM` (for example,
+`08:00`), save it, then select **Sleeping**. The next occurrence of that time
+in Europe/Copenhagen is scheduled; if it has passed today, it is set for tomorrow.
+The alarm runs without the website being open. Saving a new time while Sleeping
+is selected reschedules it. The website shows the scheduled date and time.
+`POST /api/sleeping` accepts `{"alarm_time":"08:00"}`; select it through
+`POST /api/mode` with `{"mode":"sleeping"}`. Status includes `sleeping` with
+the phase, alarm time, scheduled timestamp, remaining seconds, and playback errors.
+
+At the scheduled time, `assets/AlarmApple.mp3` loops. Its playback volume rises
+from 50% to 100% over two minutes, relative to the current output volume.
+Either arcade button stops the alarm, waits five seconds, speaks **Godmorgen gruppe 5** in Danish,
+then starts DR P8 Jazz from `https://live-icy.dr.dk/A/A22H.mp3`.
+Press either arcade button again to cancel the five-second wait, greeting, or radio. Presses during
+the waiting period do nothing. Leaving Sleeping or using Stop cancels the alarm
+and playback. P8 Jazz needs an internet connection.
 
 ### NFC reading state
 

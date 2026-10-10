@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 
 from simple_jukebox.survival_audio import SurvivalAudio
+from simple_jukebox.participant_jingles import sentence_parts
 
 
 class NfcSpeech(SurvivalAudio):
@@ -26,10 +27,20 @@ class NfcSpeech(SurvivalAudio):
             with tempfile.TemporaryDirectory(prefix='jukebox-nfc-') as directory:
                 text_path = Path(directory) / 'text.txt'
                 wav_path = Path(directory) / 'speech.wav'
-                text_path.write_text(text, encoding='utf-8')
-                if self._run(['espeak-ng', '-v', voice, '-s', str(rate), '-w',
-                              str(wav_path), '-f', str(text_path)], cancel):
-                    self._run(['paplay', str(wav_path)], cancel)
+                for part, jingle in sentence_parts(text):
+                    if cancel.is_set():
+                        return
+                    if jingle is not None:
+                        ready = self._run(['ffmpeg', '-nostdin', '-y', '-loglevel', 'error',
+                                           '-i', str(jingle), str(wav_path)], cancel)
+                    elif any(character.isalnum() for character in part):
+                        text_path.write_text(part, encoding='utf-8')
+                        ready = self._run(['espeak-ng', '-v', voice, '-s', str(rate), '-w',
+                                           str(wav_path), '-f', str(text_path)], cancel)
+                    else:
+                        continue
+                    if not ready or not self._run(['paplay', str(wav_path)], cancel):
+                        return
         except Exception as error:
             if not cancel.is_set():
                 self.error = str(error)

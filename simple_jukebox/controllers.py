@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import subprocess
 import threading
 from pathlib import Path
@@ -28,15 +29,20 @@ class VlcPlayer:
     def play(self, track: str) -> None:
         if Path(track).name != track or track not in self.tracks():
             raise ValueError("Choose a file from the available tracks")
+        self.play_source(str(self.media_folder / track), track)
+
+    def play_source(self, source: str, label: str, *, repeat=False) -> None:
+        """Play an internally selected file or stream with optional looping."""
         self.stop()
         self.process = subprocess.Popen(
-            ["cvlc", "--intf", "rc", "--play-and-exit", "--quiet", str(self.media_folder / track)],
+            ["cvlc", "--intf", "rc", "--repeat" if repeat else "--play-and-exit",
+             "--quiet", source],
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             text=True,
         )
-        self.current_track = track
+        self.current_track = label
         self.muted = False
 
     def stop(self) -> None:
@@ -204,6 +210,7 @@ class RgbController:
     def set_mode(self, mode: str) -> None:
         if mode not in self.MODES:
             raise ValueError(f"Unknown RGB mode: {mode}")
+        logging.getLogger(__name__).info("RGB mode requested: %s", mode)
         with self._lock:
             self._stop_current()
             self.mode = mode
@@ -259,6 +266,7 @@ class RgbController:
             runners[mode](stop_event=stop_event)
         except Exception as error:
             if self._stop_event is stop_event:
+                logging.getLogger(__name__).exception("RGB effect failed: %s", mode)
                 self.error = str(error)
                 self.mode = "off"
         finally:

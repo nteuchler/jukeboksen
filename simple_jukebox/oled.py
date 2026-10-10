@@ -11,6 +11,13 @@ LOGGER = logging.getLogger(__name__)
 
 def status_lines(status):
     mode = status.get("mode", "idle")
+    if mode == "sleeping":
+        sleeping = status.get("sleeping") or {}
+        remaining = sleeping.get("remaining_seconds", 0)
+        return ["Sleeping", f"Alarm {sleeping.get('alarm_time', '08:00')}"
+                if sleeping.get("phase") == "waiting" else str(sleeping.get("phase", "")),
+                str(status.get("track") or ""),
+                str(sleeping.get("error") or status.get("message") or "")]
     if mode == "coin_survival":
         survival = status.get("survival") or {}
         remaining = survival.get("remaining_seconds", 0)
@@ -114,6 +121,8 @@ class OledService:
             while not self._stop.is_set():
                 try:
                     self._refresh()
+                    if self.error is not None:
+                        LOGGER.info("OLED recovered")
                     self.error = None
                 except Exception as error:
                     message = str(error)

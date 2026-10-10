@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+import logging
 import subprocess
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from simple_jukebox.quiz import BluetoothMedia, QuizBuzzer
 from simple_jukebox.power import power_status
 from simple_jukebox.state_machine import StateMachine
 from simple_jukebox.survival_audio import SurvivalAudio
+from simple_jukebox.diagnostics import Diagnostics, configure_logging
 
 
 def create_app(
@@ -41,6 +43,7 @@ def create_app(
     oled = OledService(machine.status)
     oled.start()
     def input_command(command):
+        app.logger.info("Hardware command: %s", command.type.value)
         future = engine.enqueue(command)
 
         def report_error(result):
@@ -120,6 +123,13 @@ def create_app(
             return jsonify({"ok": False, "error": "Provide a duration in minutes"}), 400
         return run_command(Command(CommandType.CONFIGURE_SURVIVAL, data.get("minutes")))
 
+    @app.post("/api/sleeping")
+    def configure_sleeping():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"ok": False, "error": "Provide an alarm time in 24-hour HH:MM format"}), 400
+        return run_command(Command(CommandType.CONFIGURE_SLEEPING, data.get("alarm_time")))
+
     @app.post("/api/play")
     def play():
         data = request.get_json(silent=True) or {}
@@ -189,6 +199,7 @@ def create_app(
         return jsonify({"events": events})
 
     def run_command(command):
+        app.logger.info("Web command: %s", command.type.value)
         try:
             engine.submit(command)
             return jsonify({"ok": True, "status": full_status()})
@@ -202,4 +213,24 @@ def create_app(
 
 
 if __name__ == "__main__":
-    create_app().run(host="0.0.0.0", port=5000, debug=False)
+    configure_logging()
+    app = create_app()
+
+    def diagnostic_snapshot():
+        config = app.config
+        return {"inputs": config["input_service"].get_states(),
+                "input_status": config["input_service"].status(),
+                "mode": config["machine"].mode.value,
+                "oled": config["oled"].status(),
+                "nfc": {key: value for key, value in config["services"].nfc.status().items()
+                        if key in {"active", "connected", "error", "text_error", "detections"}},
+                "rgb": config["rgb"].status(), "power": power_status()}
+
+    diagnostics = Diagnostics(diagnostic_snapshot)
+    diagnostics.start()
+    atexit.register(diagnostics.stop)
+    try:
+        app.run(host="0.0.0.0", port=5000, debug=False)
+    except Exception:
+        logging.getLogger(__name__).exception("Application failed")
+        raise

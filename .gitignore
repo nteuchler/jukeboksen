@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+simple_jukebox/logs/
 .backups/
 .venv*/
 simple_jukebox/.venv/

@@ -156,14 +156,30 @@ simple_jukebox/.venv/bin/python -m pip install --force-reinstall --no-deps rpi-l
 simple_jukebox/.venv/bin/python -c 'import RPi.GPIO as G; import lgpio; print(G.__file__)'
 ```
 
-Inventory caveat: the inspected Pi currently reports *both* distributions;
-its imported `RPi/GPIO/__init__.py` contains `from RPi._GPIO import *` (the legacy
-implementation). Its `pip freeze` also points `rpi-lgpio` at a temporary wheel
-under `/tmp/jukebox-gpio-repair/`. Neither should be copied as a reproducible
-configuration. The clean install above follows the repository's intended backend;
-verify physical inputs after rebuilding. `pip check` may report Blinka's legacy
+Verify the imported module contains `import lgpio`, rather than
+`from RPi._GPIO import *` (the legacy implementation). Both distributions were
+found installed during the October 8 hardware diagnosis. Repeat the repair above
+after dependency installations that reintroduce legacy `RPi.GPIO`. Do not copy a
+`pip freeze` entry referencing a temporary wheel as a reproducible configuration.
+Verify physical inputs after rebuilding. `pip check` may report Blinka's legacy
 `RPi.GPIO` dependency after this deliberate replacement; do not reinstall both
 implementations just to silence that metadata warning.
+
+### GPIO10 RGB strip: fixed SPI clock on Pi 4
+
+The SPI WS2812 driver requires a fixed core clock on Raspberry Pi 4. Include the
+following in `/boot/firmware/config.txt`, preserving the existing audio and I2C
+configuration, then reboot:
+
+```ini
+[pi4]
+core_freq=500
+core_freq_min=500
+[all]
+```
+
+Check `vcgencmd get_config int` after boot: both values should be 500.
+See the [RGB driver's SPI requirements](https://github.com/jgarff/rpi_ws281x#spi).
 
 Key Python versions observed (the requirements files define supported ranges):
 

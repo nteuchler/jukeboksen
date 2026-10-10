@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import deque
 import os
+import logging
 import threading
 
 from simple_jukebox.ndef import read_text_records
@@ -95,10 +96,12 @@ class NfcReader:
             cleanup = None
             try:
                 reader, cleanup = self._factory()
+                logging.getLogger(__name__).info("NFC connected")
                 while not self._stop.is_set():
                     self._record(reader.read_passive_target(timeout=0.5), reader)
                     self._stop.wait(self._interval)
             except Exception as error:
+                logging.getLogger(__name__).warning("NFC unavailable: %s", error)
                 self._update(connected=False, uid=None, texts=[], error=str(error))
             finally:
                 if cleanup is not None:

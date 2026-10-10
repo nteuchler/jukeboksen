@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import queue
 import threading
 from concurrent.futures import Future
@@ -28,6 +29,7 @@ class CommandType(str, Enum):
     ARCADE_PRESS = "arcade_press"
     COIN_INSERTED = "coin_inserted"
     CONFIGURE_SURVIVAL = "configure_survival"
+    CONFIGURE_SLEEPING = "configure_sleeping"
     SET_RGB = "set_rgb"
     SHUTDOWN = "shutdown"
 
@@ -107,19 +109,23 @@ class CommandEngine:
                 self.machine.poll_nfc()
                 self.machine.poll_quiz()
                 self.machine.poll_survival()
+                self.machine.poll_sleeping()
                 await asyncio.sleep(0.01)
                 continue
             queued = self._queue.get_nowait()
             try:
                 running = queued.command.type is not CommandType.SHUTDOWN
                 value = self._handle(queued.command)
+                logging.getLogger(__name__).info("Command completed: %s mode=%s", queued.command.type.value, getattr(self.machine, "mode", None))
             except Exception as error:
+                logging.getLogger(__name__).exception("Command failed: %s", queued.command.type.value)
                 queued.result.set_exception(error)
             else:
                 queued.result.set_result(value)
             finally:
                 self._queue.task_done()
             self.machine.poll_survival()
+            self.machine.poll_sleeping()
             self.machine.poll_nfc()
 
     def _handle(self, command: Command) -> Any:
@@ -149,6 +155,8 @@ class CommandEngine:
             return self.machine.coin_inserted()
         if command.type is CommandType.CONFIGURE_SURVIVAL:
             return self.machine.configure_survival(command.value)
+        if command.type is CommandType.CONFIGURE_SLEEPING:
+            return self.machine.configure_sleeping(command.value)
         if command.type is CommandType.ADJUST_VOLUME:
             return self.services.volume.set(
                 max(0, min(100, self.services.volume.get() + command.value))

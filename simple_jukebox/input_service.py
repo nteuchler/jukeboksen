@@ -105,10 +105,12 @@ class InputService:
             return
 
         if self._use_gpio:
+            LOGGER.info("GPIO backend module=%s version=%s", getattr(self._gpio, "__file__", "injected"), getattr(self._gpio, "VERSION", "unknown"))
             for name, pin in PIN_MAP.items():
                 try:
                     self._gpio.setup(pin, self._gpio.IN, pull_up_down=self._gpio.PUD_UP)
                     pressed = not bool(self._gpio.input(pin))
+                    LOGGER.info("GPIO initial %s BCM%s pressed=%s pull=UP", name, pin, pressed)
                     with self._lock:
                         self._candidates[name] = pressed
                         self._candidate_since[name] = time.monotonic()
@@ -167,6 +169,7 @@ class InputService:
                     and now - self._candidate_since[name] >= self._debounce_seconds
                 ):
                     self._states[name] = pressed
+                    LOGGER.info("GPIO stable %s BCM%s pressed=%s armed=%s monotonic=%.6f", name, pin, pressed, self._armed[name], now)
                     if name == "ENCODER_PRESS":
                         if pressed:
                             self._encoder_press_since = self._candidate_since[name]
@@ -231,6 +234,7 @@ class InputService:
     def set_navigation_enabled(self, enabled: bool) -> None:
         """Require a fresh press after enabling, including during debounce."""
         with self._lock:
+            LOGGER.info("Navigation enabled=%s", enabled)
             self._navigation_disabled = not enabled
             for name in ("NAV_LEFT", "NAV_RIGHT"):
                 self._armed[name] = not (self._states[name] or self._candidates[name])

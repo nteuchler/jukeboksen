@@ -6,6 +6,7 @@ from enum import Enum
 
 from simple_jukebox.services import JukeboxServices
 from simple_jukebox.survival import SurvivalTimer
+from simple_jukebox.sleeping import SleepingMode
 
 
 class Mode(str, Enum):
@@ -15,6 +16,7 @@ class Mode(str, Enum):
     NFC = "nfc"
     MUSIC_QUIZ = "music_quiz"
     COIN_SURVIVAL = "coin_survival"
+    SLEEPING = "sleeping"
 
 
 class StateMachine:
@@ -33,11 +35,12 @@ class StateMachine:
         self._quiz_buzz_at = 0.0
         self._previous_rgb = "off"
         self.survival = SurvivalTimer(services.survival_audio, services.rgb)
+        self.sleeping = SleepingMode()
 
     def navigate_mode(self, direction: int) -> None:
         if isinstance(direction, bool) or direction not in (-1, 1):
             raise ValueError("Navigation direction must be -1 or 1")
-        modes = (Mode.NFC, Mode.IDLE, Mode.LOCAL_FILES, Mode.BLUETOOTH, Mode.MUSIC_QUIZ, Mode.COIN_SURVIVAL)
+        modes = (Mode.NFC, Mode.IDLE, Mode.LOCAL_FILES, Mode.BLUETOOTH, Mode.MUSIC_QUIZ, Mode.COIN_SURVIVAL, Mode.SLEEPING)
         with self._lock:
             self.change_mode(modes[(modes.index(self.mode) + direction) % len(modes)].value)
 
@@ -75,6 +78,9 @@ class StateMachine:
                 self.message = "Present an NFC tag"
             elif target is Mode.LOCAL_FILES:
                 self.message = "Choose a local audio file"
+            elif target is Mode.SLEEPING:
+                self.sleeping.start()
+                self.message = "Sleeping: waiting for the alarm"
             else:
                 self.message = "Ready"
             self.mode = target
@@ -163,6 +169,12 @@ class StateMachine:
 
     def arcade_press(self, player: int) -> None:
         with self._lock:
+            if self.mode is Mode.SLEEPING:
+                if player not in (1, 2):
+                    raise ValueError("Unknown arcade button")
+                self.sleeping.press()
+                self._sleeping_message()
+                return
             if self.mode is not Mode.MUSIC_QUIZ or self.quiz_winner is not None:
                 return
             if player not in (1, 2):
@@ -219,6 +231,9 @@ class StateMachine:
 
     def stop_audio(self) -> None:
         with self._lock:
+            if self.mode is Mode.SLEEPING:
+                self.sleeping.stop()
+                self.sleeping.phase = 'stopped'
             if self.services.nfc_actions is not None:
                 self.services.nfc_actions.stop()
             else:
@@ -227,7 +242,7 @@ class StateMachine:
 
     def toggle_mute(self) -> bool:
         with self._lock:
-            muted = self.services.audio.toggle_mute()
+            muted = (self.sleeping.audio if self.mode is Mode.SLEEPING else self.services.audio).toggle_mute()
             self.message = "Muted" if muted else "Sound on"
             return muted
 
@@ -236,18 +251,42 @@ class StateMachine:
             return {
                 "mode": self.mode.value,
                 "message": self.message,
-                "playing": self.services.audio.playing or bool(
+                "playing": bool(self.mode is Mode.SLEEPING and (
+                    self.sleeping.alarm.playing or self.sleeping.audio.playing or self.sleeping.speech.playing)) or self.services.audio.playing or bool(
                     self.mode in {Mode.NFC, Mode.LOCAL_FILES} and self.services.nfc_actions
                     and self.services.nfc_actions.status()["speaking"]),
                 "nfc_action": self.services.nfc_actions.status() if self.services.nfc_actions else None,
                 "last_played": self.last_played["label"] if self.last_played else None,
-                "track": self.services.audio.current_track,
-                "muted": self.services.audio.muted,
+                "track": ('AlarmApple' if self.sleeping.phase == 'alarm' else self.sleeping.audio.current_track)
+                if self.mode is Mode.SLEEPING else self.services.audio.current_track,
+                "muted": self.sleeping.audio.muted if self.mode is Mode.SLEEPING else self.services.audio.muted,
                 "nfc": self.services.nfc.status() if self.services.nfc else None,
                 "bluetooth_active": self.services.bluetooth.active,
                 "quiz": {"winner": self.quiz_winner, "error": self.quiz_error},
                 "survival": self.survival.status(),
+                "sleeping": self.sleeping.status(),
             }
+
+    def configure_sleeping(self, alarm_time):
+        with self._lock:
+            self.sleeping.configure(alarm_time)
+            if self.mode is Mode.SLEEPING:
+                self._sleeping_message()
+
+    def _sleeping_message(self):
+        self.message = {'waiting': 'Sleeping: waiting for the alarm',
+                        'alarm': 'Wake up! Press either arcade button',
+                        'greeting_delay': 'Good morning greeting starts in five seconds',
+                        'greeting': 'Godmorgen gruppe 5',
+                        'radio': 'P8 Jazz: press either arcade button to stop',
+                        'stopped': 'Sleeping playback stopped',
+                        'error': f'Sleeping error: {self.sleeping.error}'}.get(self.sleeping.phase, 'Sleeping')
+
+    def poll_sleeping(self):
+        with self._lock:
+            if self.mode is Mode.SLEEPING:
+                self.sleeping.poll()
+                self._sleeping_message()
 
     def close(self) -> None:
         with self._lock:
@@ -256,6 +295,8 @@ class StateMachine:
             self.message = "Ready"
 
     def _leave_current_mode(self) -> None:
+        if self.mode is Mode.SLEEPING:
+            self.sleeping.stop()
         if self.mode is Mode.COIN_SURVIVAL:
             self.survival.stop()
             self.services.rgb.set_mode(self._previous_rgb)
