@@ -82,7 +82,7 @@ listens to the common speaker-output monitor, so it reacts to local files and
 Bluetooth playback.
 
 The left/right navigation buttons (BCM23/BCM24) select the previous/next mode:
-NFC reader → Idle → Local files → Bluetooth speaker → Music quiz → Coin survival, wrapping at
+CD afspiller → Idle → Local files → Bluetooth speaker → Music quiz → Coin survival, wrapping at
 either end. Each debounced press moves once; holding does not repeat. Use
 **Disable/Enable navigation buttons** in the website's Mode section to lock or
 unlock these physical controls. Website mode selection stays available. Navigation
@@ -172,9 +172,9 @@ Press either arcade button again to cancel the five-second wait, greeting, or ra
 the waiting period do nothing. Leaving Sleeping or using Stop cancels the alarm
 and playback. P8 Jazz needs an internet connection.
 
-### NFC reading state
+### CD afspiller state
 
-Select **NFC reader** on the control page (or POST `{"mode":"nfc"}` to
+Select **CD afspiller** on the control page (or POST `{"mode":"nfc"}` to
 `/api/mode`). The reader scans in the background only while this state is active.
 The web page and OLED show tag UIDs; `/api/status` includes `nfc` connection/error,
 current `uid`, `last_uid`, and `detections` fields. A held tag counts once;
@@ -201,7 +201,7 @@ in an NDEF Text record (case and whitespace matter):
 
 Put local audio in `simple_jukebox/media/`; `file` is a filename from the Local
 music list, without a directory. Replace the example `song.mp3` with your file.
-Write an **NDEF Text record**, such as `hej`, to a tag, then select **NFC reader**
+Write an **NDEF Text record**, such as `hej`, to a tag, then select **CD afspiller**
 and present it. TTS runs offline with `espeak-ng`; Danish (`da`) is the default
 when `voice` is omitted. `rate` is words per minute (80–450, default 145).
 The spoken sentence comes from the mapping's `text` field.
@@ -269,21 +269,20 @@ changes for this app session; restarting the app restores the 30-minute default.
 
 Each debounced coin input on **BCM12** resets the timer to the full selected
 duration, stops the current warning/alarm, refills the LEDs, and plays a short
-random clip matching `assets/coin_moan*.wav`. Add numbered WAV files to that
-folder for variety; no restart is needed after adding clips. The original
-1.73-second ghost moan is bundled for offline playback; see
-[sound credits](assets/README.md). A held contact
-counts once. Coins outside this mode still count in the input log but do not
-start a countdown.
+random `Tak_*.mp3` recording from `assets/Coin/`. A held contact counts once.
+Coins outside this mode still count in the input log but do not start a countdown.
 
-Offline spoken warnings play at 10, 5, and 1 minute, then 30 and 10 seconds
-remaining (only thresholds below the starting duration). At zero, a synthesized
-alarm, descending dying sound, and revival prompt repeat every 15 seconds until
-a coin arrives or you leave the mode. Audio uses the normal speaker volume and
-mute settings. Install its system dependencies on a replacement Pi:
+Recordings play at 20, 15, 10, 5, and 1 minute remaining, using the matching
+`20min_*`, `15min_*`, `10min_*`, `5min_*`, and `1min_*` MP3 files (only thresholds
+below the starting duration). `Nedtælling.mp3` plays at 10 seconds remaining.
+At zero, a random `Smerte_*.mp3` recording repeats every 15 seconds until a coin
+arrives or you leave the mode. Matching variants are randomly selected and the
+folder is rescanned for each cue. Output volume is set to 100% during the final
+five minutes and while expired; mute still applies. Install its system dependencies
+on a replacement Pi:
 
 ```bash
-sudo apt install espeak-ng pulseaudio-utils
+sudo apt install ffmpeg pulseaudio-utils
 ```
 
 Both LED sides shrink symmetrically from 45 LEDs per side to zero, with a fading

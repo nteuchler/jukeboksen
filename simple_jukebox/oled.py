@@ -33,7 +33,7 @@ def status_lines(status):
     title = {"idle": "Idle", "local_files": "Local files", "bluetooth": "Bluetooth"}.get(mode, str(mode))
     if mode == "nfc":
         nfc = status.get("nfc") or {}
-        return ["NFC reader", "Reader error" if nfc.get("error") else
+        return ["CD afspiller", "Reader error" if nfc.get("error") else
                 "Tag detected" if nfc.get("uid") else "Waiting for tag",
                 str(" / ".join(nfc.get("last_texts") or []) or nfc.get("last_uid") or ""),
                 str(nfc.get("error") or nfc.get("text_error") or

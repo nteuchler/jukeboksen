@@ -80,7 +80,7 @@ def test_nfc_mode_lifecycle_and_audio_cleanup():
 def test_nfc_oled_displays_uid_and_errors():
     from simple_jukebox.oled import status_lines
     lines = status_lines({'mode': 'nfc', 'nfc': {'uid': '1234', 'last_uid': '1234'}})
-    assert lines[:3] == ['NFC reader', 'Tag detected', '1234']
+    assert lines[:3] == ['CD afspiller', 'Tag detected', '1234']
     assert 'missing' in status_lines({'mode': 'nfc', 'nfc': {'error': 'missing'}})
 
 

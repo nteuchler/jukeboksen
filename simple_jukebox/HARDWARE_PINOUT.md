@@ -526,7 +526,7 @@ Mode/state-machine code should consume logical events rather than accessing GPIO
 
 Planned jukebox modes:
 
-1. NFC reader mode
+1. CD afspiller mode
 2. Chat / Bumblebee speech mode
 3. Music quiz mode
 4. Coin timer mode

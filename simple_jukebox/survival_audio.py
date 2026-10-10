@@ -1,45 +1,28 @@
-"""Offline spoken warnings and original synthesized survival sound effects."""
+"""Cancellable playback of the bundled coin survival recordings."""
 from __future__ import annotations
 
-import math
 import random
-import struct
 import subprocess
 import tempfile
 import threading
-import wave
 from pathlib import Path
 
 
-COIN_SOUND_DIR = Path(__file__).with_name('assets')
-
-WARNINGS = {
-    '600': '10 minutes remaining. Insert a coin to survive.',
-    '300': '5 minutes remaining. Insert a coin to survive.',
-    '60': '1 minute remaining. Insert a coin now.',
-    '30': '30 seconds remaining. I am running out of time.',
-    '10': '10 seconds remaining. Insert a coin. Help me!',
+COIN_SOUND_DIR = Path(__file__).with_name('assets') / 'Coin'
+CUE_PATTERNS = {
+    'coin': 'Tak_*.mp3',
+    '1200': '20min_*.mp3',
+    '900': '15min_*.mp3',
+    '600': '10min_*.mp3',
+    '300': '5min_*.mp3',
+    '60': '1min_*.mp3',
+    '10': 'Nedtælling.mp3',
+    'expired': 'Smerte_*.mp3',
 }
 
 
-def write_effect(path, dying=False):
-    rate, duration = 22050, 2.4
-    samples = bytearray()
-    phase = 0.0
-    for index in range(int(rate * duration)):
-        t = index / rate
-        frequency = (650 * (1 - t / duration) + 55) if dying else (880 if int(t * 5) % 2 else 550)
-        phase += 2 * math.pi * frequency / rate
-        envelope = min(1, t / .025, (duration - t) / .15)
-        wobble = .65 + .35 * math.sin(2 * math.pi * 11 * t) if dying else 1
-        samples.extend(struct.pack('<h', int(11000 * envelope * wobble * math.sin(phase))))
-    with wave.open(str(path), 'wb') as output:
-        output.setparams((1, 2, rate, 0, 'NONE', 'not compressed'))
-        output.writeframes(samples)
-
-
 class SurvivalAudio:
-    """Run synthesis/playback off the command thread; stop cancels either process."""
+    """Decode and play recordings off the command thread; stop cancels either process."""
 
     def __init__(self):
         self.error = None
@@ -47,7 +30,7 @@ class SurvivalAudio:
         self._cancel = threading.Event()
 
     def play(self, cue):
-        if cue not in {'expired', 'coin'} and cue not in WARNINGS:
+        if cue not in CUE_PATTERNS:
             raise ValueError('Unknown survival sound')
         self.stop()
         self.error = None
@@ -87,25 +70,15 @@ class SurvivalAudio:
 
     def _play(self, cue, cancel):
         try:
-            if cue == 'coin':
-                clips = sorted(path for path in COIN_SOUND_DIR.glob('coin_moan*.wav') if path.is_file())
-                if not clips:
-                    raise FileNotFoundError(f'No coin_moan*.wav sounds found in {COIN_SOUND_DIR}')
-                self._run(['paplay', str(random.choice(clips))], cancel)
-                return
+            pattern = CUE_PATTERNS[cue]
+            clips = sorted(path for path in COIN_SOUND_DIR.glob(pattern) if path.is_file())
+            if not clips:
+                raise FileNotFoundError(f'No {pattern} sounds found in {COIN_SOUND_DIR}')
+            clip = random.choice(clips)
             with tempfile.TemporaryDirectory(prefix='jukebox-survival-') as directory:
                 path = Path(directory) / 'cue.wav'
-                if cue == 'expired':
-                    for dying in (False, True):
-                        if cancel.is_set():
-                            return
-                        write_effect(path, dying=dying)
-                        if not self._run(['paplay', str(path)], cancel):
-                            return
-                    speech = 'Time is up. Insert a coin to bring me back to life.'
-                else:
-                    speech = WARNINGS[cue]
-                if self._run(['espeak-ng', '-s', '145', '-w', str(path), speech], cancel):
+                if self._run(['ffmpeg', '-nostdin', '-y', '-loglevel', 'error',
+                              '-i', str(clip), str(path)], cancel):
                     self._run(['paplay', str(path)], cancel)
         except Exception as error:
             if not cancel.is_set():

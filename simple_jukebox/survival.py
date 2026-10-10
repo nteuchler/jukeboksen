@@ -6,9 +6,11 @@ import time
 
 
 class SurvivalTimer:
-    WARNINGS = (600, 300, 60, 30, 10)
+    WARNINGS = (1200, 900, 600, 300, 60, 10)
+    FINAL_MINUTES = 5
 
-    def __init__(self, sounds, rgb, clock=time.monotonic):
+    def __init__(self, sounds, rgb, clock=time.monotonic, volume=None):
+        self.volume = volume
         self.sounds = sounds
         self.rgb = rgb
         self.clock = clock
@@ -61,6 +63,12 @@ class SurvivalTimer:
         self.expired = remaining == 0
         try:
             self.rgb.set_countdown(remaining / (self.minutes * 60))
+        except Exception as error:
+            self.error = str(error)
+        try:
+            if remaining <= self.FINAL_MINUTES * 60 and self.volume is not None:
+                if self.volume.get() != 100:
+                    self.volume.set(100)
         except Exception as error:
             self.error = str(error)
         try:

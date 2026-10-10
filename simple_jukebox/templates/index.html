@@ -37,7 +37,7 @@
   </section>
   <section>
     <h2>Mode</h2>
-    <button class="mode" data-mode="nfc">NFC reader</button>
+    <button class="mode" data-mode="nfc">CD afspiller</button>
     <button class="mode" data-mode="idle">Idle</button>
     <button class="mode" data-mode="local_files">Local files</button>
     <button class="mode" data-mode="bluetooth">Bluetooth speaker</button>
@@ -172,7 +172,7 @@
         : power.undervoltage_occurred
         ? 'Power warning: low supply voltage was detected earlier since the Pi booted. Voltage is normal now. Check the power supply and cable; this history clears after reboot.'
         : '';
-      document.querySelector('#mode').textContent = `Mode: ${status.mode}`;
+      document.querySelector('#mode').textContent = `Mode: ${status.mode === 'nfc' ? 'CD afspiller' : status.mode}`;
       document.querySelector('#message').textContent = status.message;
       document.querySelector('#last-played').textContent = status.last_played || 'Nothing played yet.';
       document.querySelector('#replay').disabled = replayBusy || !status.last_played;

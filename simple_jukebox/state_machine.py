@@ -34,7 +34,7 @@ class StateMachine:
         self._quiz_poll_at = 0.0
         self._quiz_buzz_at = 0.0
         self._previous_rgb = "off"
-        self.survival = SurvivalTimer(services.survival_audio, services.rgb)
+        self.survival = SurvivalTimer(services.survival_audio, services.rgb, volume=services.volume)
         self.sleeping = SleepingMode()
 
     def navigate_mode(self, direction: int) -> None:
